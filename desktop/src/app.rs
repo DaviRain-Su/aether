@@ -225,6 +225,152 @@ impl Desk {
         cx.notify();
     }
 
-    // REST OF FILE CONTINUES IN NEXT COMMIT - see app_render.rs
-    fn stub_rest(&self) {}
+    fn submit_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let text = self.prompt.read(cx).value().to_string();
+        let text = text.trim().to_string();
+        if text.is_empty() {
+            return;
+        }
+        self.log.push(format!("you  {text}"));
+        let ticker = self.ticker().cloned();
+        let brief = crate::desk::brief(
+            &text,
+            &self.focus,
+            ticker.as_ref(),
+            &self.book,
+            &mut self.memory,
+        );
+        self.log.push(brief.text.clone());
+        if let (Some(side), Some(qty), Some(t)) = (brief.side, brief.qty, ticker) {
+            match self.book.apply(&t.symbol, &side, qty, t.last) {
+                Ok(realized) => {
+                    if let Some(r) = realized {
+                        crate::memory::record_loss(&mut self.memory, &t.symbol, "long", r);
+                    }
+                    self.log.push(format!("fill  {side} {qty} {} @ {:.2}", t.symbol, t.last));
+                }
+                Err(err) => self.log.push(format!("reject  {err}")),
+            }
+        }
+        self.prompt.update(cx, |input, cx| {
+            input.set_value("", window, cx);
+        });
+        if self.memory.cloud {
+            if let (Some(dev), Some(lesson)) = (self.device.clone(), self.memory.lessons.first().cloned()) {
+                let mem = self.memory.clone();
+                cx.background_executor()
+                    .spawn(async move {
+                        mem.push_lesson(&dev.origin, &dev.owner_id, &dev.id, &lesson);
+                    })
+                    .detach();
+            }
+        }
+        cx.notify();
+    }
+
+    fn trade(&mut self, side: &str, cx: &mut Context<Self>) {
+        let Some(t) = self.ticker().cloned() else {
+            self.log.push("no mark".into());
+            cx.notify();
+            return;
+        };
+        let qty: f64 = self.qty.parse().unwrap_or(0.0);
+        match self.book.apply(&t.symbol, side, qty, t.last) {
+            Ok(realized) => {
+                if let Some(r) = realized {
+                    crate::memory::record_loss(&mut self.memory, &t.symbol, "long", r);
+                    self.log.push(format!("closed {:+.2}", r));
+                } else {
+                    self.log.push(format!("{side} {qty} {} @ {:.2}", t.symbol, t.last));
+                }
+            }
+            Err(err) => self.log.push(err),
+        }
+        cx.notify();
+    }
+
+    fn pair(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let code = self.pair_input.read(cx).value().to_string();
+        let origin = crate::pair::origin();
+        self.status = "claiming…".into();
+        self.pair_input.update(cx, |input, cx| input.set_value("", window, cx));
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { crate::pair::claim(&code, &origin) })
+                .await;
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(dev) => {
+                        this.status = format!("paired {}", dev.name).into();
+                        this.log.push(format!("paired as {} ({})", dev.name, dev.code));
+                        let origin = dev.origin.clone();
+                        let owner = dev.owner_id.clone();
+                        let id = dev.id.clone();
+                        this.device = Some(dev);
+                        this.memory.pull_cloud(&origin, &owner, &id);
+                        this.pull_wallet(cx);
+                        if this.memory.cloud {
+                            this.log.push(format!(
+                                "cloud memory · {} · {} lessons",
+                                this.memory.plan,
+                                this.memory.lessons.len()
+                            ));
+                        } else {
+                            this.log.push(
+                                "Observer: memory stays on this box. Desk+ syncs the book.".into(),
+                            );
+                        }
+                    }
+                    Err(err) => {
+                        this.status = format!("pair failed: {err}").into();
+                        this.log.push(format!("pair  {err}"));
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
+    }
+
+    fn pull_wallet(&mut self, cx: &mut Context<Self>) {
+        let Some(dev) = self.device.clone() else { return };
+        cx.spawn(async move |this, cx| {
+            let snap = cx
+                .background_executor()
+                .spawn(async move {
+                    crate::wallet::WalletSnap::pull(&dev.origin, &dev.owner_id, &dev.id)
+                })
+                .await;
+            this.update(cx, |this, cx| {
+                let was = this.wallet.minted;
+                this.wallet = snap;
+                if this.wallet.minted && !was {
+                    this.log.push(format!(
+                        "live wallet · ${:.2} · {} chain(s)",
+                        this.wallet.live_usd,
+                        this.wallet.wallets.len()
+                    ));
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn toggle_path(&mut self, cx: &mut Context<Self>) {
+        self.local_only = !self.local_only;
+        self.log.push(if self.local_only {
+            "Path: local agent. This box. No relay.".into()
+        } else {
+            "Path: fleet. Pair a code to sit in the vault and sync memory.".into()
+        });
+        cx.notify();
+    }
 }
+
+include!("desk_render_a.inc.rs");
+include!("desk_render_b.inc.rs");
