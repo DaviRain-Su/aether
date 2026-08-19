@@ -15,6 +15,7 @@ import type {
   ProposedTrade,
 } from "./types";
 import { uid } from "./utils";
+import { parseTape, type LiveTape } from "./venues";
 
 type HarnessState = {
   markets: Market[];
@@ -34,6 +35,7 @@ type HarnessState = {
   streaming: boolean;
   hydrated: boolean;
   chartBar: ChartBar;
+  tapeSource: LiveTape;
   privacy: PrivacyPrefs;
   setMarkets: (m: Market[]) => void;
   setFocus: (s: string) => void;
@@ -43,6 +45,7 @@ type HarnessState = {
   toggleFollow: (id: string) => void;
   setModel: (id: string) => void;
   setChartBar: (bar: ChartBar) => void;
+  setTapeSource: (source: LiveTape) => void;
   setPrivacy: (patch: Partial<PrivacyPrefs>) => void;
   addAcpAgent: (a: Omit<AcpAgentConfig, "id" | "createdAt">) => void;
   removeAcpAgent: (id: string) => void;
@@ -84,6 +87,7 @@ export const useHarness = create<HarnessState>()(
       followed: [],
       modelId: "desk-rules",
       chartBar: "15m",
+      tapeSource: "okx",
       privacy: { hideBalances: false, hidePnl: false, hideIdentity: false },
       acpAgents: [
         {
@@ -117,6 +121,7 @@ export const useHarness = create<HarnessState>()(
         }),
       setModel: (modelId) => set({ modelId }),
       setChartBar: (chartBar) => set({ chartBar }),
+      setTapeSource: (tapeSource) => set({ tapeSource: parseTape(tapeSource) }),
       setPrivacy: (patch) => set((s) => ({ privacy: { ...s.privacy, ...patch } })),
       addAcpAgent: (a) =>
         set((s) => ({
@@ -193,12 +198,14 @@ export const useHarness = create<HarnessState>()(
         acpAgents: s.acpAgents,
         messages: s.messages.slice(-40),
         chartBar: s.chartBar,
+        tapeSource: s.tapeSource,
         privacy: s.privacy,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
           state.hydrated = true;
           state.chartBar ??= "15m";
+          state.tapeSource = parseTape(state.tapeSource);
           state.privacy ??= { hideBalances: false, hidePnl: false, hideIdentity: false };
         }
       },

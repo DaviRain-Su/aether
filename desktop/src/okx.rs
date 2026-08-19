@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use serde::Deserialize;
 
 const OKX: &str = "https://www.okx.com";
+const HTTP_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(4);
 
 #[derive(Clone, Debug)]
 pub struct Ticker {
@@ -27,6 +28,11 @@ pub struct Candle {
     pub c: f64,
     #[allow(dead_code)]
     pub v: f64,
+}
+
+pub struct Tape {
+    pub tickers: Result<Vec<Ticker>>,
+    pub candles: Result<Vec<Candle>>,
 }
 
 #[derive(Deserialize)]
@@ -62,6 +68,14 @@ pub fn inst_id(symbol: &str) -> String {
     }
 }
 
+pub fn candle_limit(bar: &str) -> u32 {
+    match bar {
+        "1s" => 80,
+        "1m" => 120,
+        _ => 120,
+    }
+}
+
 fn num(s: &str) -> f64 {
     s.parse().unwrap_or(0.0)
 }
@@ -69,7 +83,7 @@ fn num(s: &str) -> f64 {
 fn get_json<T: serde::de::DeserializeOwned>(path: &str) -> Result<T> {
     let url = format!("{OKX}{path}");
     let env: Envelope<T> = ureq::get(&url)
-        .timeout(std::time::Duration::from_secs(8))
+        .timeout(HTTP_TIMEOUT)
         .call()
         .with_context(|| url.clone())?
         .into_json()?;
@@ -131,6 +145,18 @@ pub fn candles(symbol: &str, bar: &str, limit: u32) -> Result<Vec<Candle>> {
         .collect();
     out.sort_by_key(|c| c.t);
     Ok(out)
+}
+
+/// Tickers + candles on worker threads. Never call from the GPUI UI thread.
+pub fn pull_tape(focus: &str, bar: &str, limit: u32) -> Tape {
+    std::thread::scope(|s| {
+        let tickers = s.spawn(tickers);
+        let candles = s.spawn(|| candles(focus, bar, limit));
+        Tape {
+            tickers: tickers.join().unwrap_or_else(|_| Err(anyhow::anyhow!("ticker thread"))),
+            candles: candles.join().unwrap_or_else(|_| Err(anyhow::anyhow!("candle thread"))),
+        }
+    })
 }
 
 pub fn label_time(t: i64, bar: &str) -> String {

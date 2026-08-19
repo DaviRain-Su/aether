@@ -24,12 +24,14 @@ impl Memory {
     }
 
     pub fn save(&self) {
-        if let Some(p) = path() {
+        let Some(p) = path() else { return };
+        let payload = serde_json::to_string_pretty(self).unwrap_or_default();
+        std::thread::spawn(move || {
             if let Some(dir) = p.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
-            let _ = std::fs::write(p, serde_json::to_string_pretty(self).unwrap_or_default());
-        }
+            let _ = std::fs::write(p, payload);
+        });
     }
 }
 

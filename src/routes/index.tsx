@@ -23,19 +23,34 @@ const PILLARS = [
   {
     k: "03",
     title: "Plugins",
-    body: "What the agent can see: marks, on-chain tape, news, mindshare, prediction books. A model without plugins is a chatbot.",
+    body: "What the agent can see: OKX, Backpack, and Phoenix tapes, on-chain, news, mindshare, prediction books. A model without plugins is a chatbot.",
   },
   {
     k: "04",
     title: "Execution",
-    body: "Paper venues for spot, Hyperliquid-style perps, equities, and prediction markets. Self-custody later. The brain, not the vault.",
+    body: "Paper venues for spot, perps, equities, and prediction markets. Tape from OKX, Backpack, or Phoenix on Solana. Self-custody later. The brain, not the vault.",
   },
 ];
 
 function LandingTicker() {
   const [tape, setTape] = useState<Market[] | null>(null);
   useEffect(() => {
-    setTape(buildStaticMarkets());
+    let cancelled = false;
+    fetch("/api/markets")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && Array.isArray(d) && d.length) setTape(d as Market[]);
+      })
+      .catch(() => {
+        if (!cancelled) setTape(buildStaticMarkets());
+      });
+    const fallback = window.setTimeout(() => {
+      if (!cancelled) setTape((cur) => cur ?? buildStaticMarkets());
+    }, 2_000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallback);
+    };
   }, []);
   if (!tape) return <div className="h-9 border-y border-border" />;
   const row = [...tape, ...tape];

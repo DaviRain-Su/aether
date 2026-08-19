@@ -41,9 +41,11 @@ function DesktopPage() {
           <p className="font-mono text-[11px] text-subtle">02</p>
           <h2 className="mt-2 font-display text-2xl">Same tape, same memory</h2>
           <p className="mt-3 text-sm leading-relaxed text-muted">
-            Native desk hits OKX public REST for marks and K-lines, runs Desk Rules locally, and
-            writes lessons to <span className="text-fg">~/.aether/memory.json</span>. A loss still
-            blocks the next session.
+            Native desk hits OKX on a background pool — the window stays live while marks
+            refresh. Run <span className="text-fg">cargo run --release</span>. Debug GPUI
+            redraws hitch. Memory still lives in{" "}
+            <span className="text-fg">~/.aether/memory.json</span>. The web desk also reads
+            Backpack and Phoenix. A loss still blocks the next session.
           </p>
         </article>
         <article className="bg-bg px-4 py-8 md:px-6">

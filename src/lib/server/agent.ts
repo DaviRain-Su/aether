@@ -12,6 +12,7 @@ import { appendJournal, loadMemory, upsertEntity } from "../memory/store";
 import type { MemorySnapshot } from "../memory/types";
 import { isOkxBar } from "../okx";
 import { getCandles, getMarkets, newsWire, onchainSnapshot } from "./markets";
+import { parseTape, type LiveTape } from "../venues";
 
 export type TurnInput = {
   text: string;
@@ -25,6 +26,7 @@ export type TurnInput = {
   focus?: string;
   guestId?: string;
   slotId?: string;
+  tapeSource?: LiveTape | string;
 };
 
 export type SseEvent =
@@ -53,7 +55,8 @@ export async function runTurn(
   input: TurnInput,
   emit: (e: SseEvent) => void,
 ): Promise<void> {
-  const markets = await getMarkets();
+  const tape = parseTape(input.tapeSource);
+  const markets = await getMarkets(tape);
   const sessionUser = await getSessionUser();
   let ownerId: string | null = null;
   try {
@@ -195,6 +198,7 @@ async function runGrokTurn(
           book: input.book,
           emit,
           guestId: input.guestId,
+          tapeSource: parseTape(input.tapeSource),
         });
         emit({
           type: "tool",
@@ -285,6 +289,7 @@ async function runAcpTurn(
             markets,
             book: input.book,
             emit,
+            tapeSource: parseTape(input.tapeSource),
           });
           acpEmit({
             sessionUpdate: "tool_call_update",
@@ -380,6 +385,7 @@ async function execTool(
     book: PortfolioSnapshot;
     emit: (e: SseEvent) => void;
     guestId?: string;
+    tapeSource?: LiveTape;
   },
 ): Promise<string> {
   let args: Record<string, unknown> = {};
@@ -429,8 +435,15 @@ async function execTool(
   }
   if (name === "get_candles") {
     const barRaw = String(args.bar ?? "15m");
-    const pack = await getCandles(symbol || "BTC", isOkxBar(barRaw) ? barRaw : "15m");
-    return JSON.stringify({ source: pack.source, bar: barRaw, candles: pack.candles.slice(-40) });
+    const source = parseTape(args.source ?? ctx.tapeSource);
+    const pack = await getCandles(symbol || "BTC", isOkxBar(barRaw) ? barRaw : "15m", source);
+    return JSON.stringify({
+      source: pack.source,
+      tape: source,
+      bar: barRaw,
+      mappedBar: pack.mappedBar,
+      candles: pack.candles.slice(-40),
+    });
   }
   if (name === "recall") {
     try {

@@ -1,7 +1,7 @@
 export const OKX_BARS = ["1s", "1m", "3m", "5m", "15m", "30m", "1H", "4H", "1D"] as const;
 export type OkxBar = (typeof OKX_BARS)[number];
 
-export const OKX_CRYPTO = ["BTC", "ETH", "SOL", "HYPE", "DOGE", "XRP", "BNB", "ADA"] as const;
+export const OKX_CRYPTO = ["BTC", "ETH", "SOL", "HYPE", "DOGE", "XRP", "BNB", "ADA", "WIF", "BONK", "PUMP", "JUP"] as const;
 
 export const BAR_MS: Record<OkxBar, number> = {
   "1s": 1_000,

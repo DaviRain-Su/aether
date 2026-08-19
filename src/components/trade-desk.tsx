@@ -15,9 +15,11 @@ import type {
   FundingSnap,
   Market,
   ProposedTrade,
+  TapeSource,
   ToolTrace,
 } from "@/lib/types";
 import { cn, formatPct, formatPx, formatQty, formatUsd } from "@/lib/utils";
+import { TAPE_META, TAPE_SOURCES, tapeLabel, type LiveTape } from "@/lib/venues";
 import { Mark } from "./app-shell";
 import { DepthPane } from "./depth-book";
 import { PriceChart } from "./price-chart";
@@ -25,34 +27,39 @@ import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 
-async function fetchMarkets(): Promise<Market[]> {
-  const res = await fetch("/api/markets");
+function sourceQs(source: LiveTape) {
+  return `source=${encodeURIComponent(source)}`;
+}
+
+async function fetchMarkets(source: LiveTape): Promise<Market[]> {
+  const res = await fetch(`/api/markets?${sourceQs(source)}`);
   if (!res.ok) throw new Error("markets");
   return (await res.json()) as Market[];
 }
 
-async function fetchCandles(symbol: string, bar: ChartBar) {
+async function fetchCandles(symbol: string, bar: ChartBar, source: LiveTape) {
   const res = await fetch(
-    `/api/markets?candles=${encodeURIComponent(symbol)}&bar=${encodeURIComponent(bar)}`,
+    `/api/markets?candles=${encodeURIComponent(symbol)}&bar=${encodeURIComponent(bar)}&${sourceQs(source)}`,
   );
   if (!res.ok) return { candles: [] as Candle[], source: "seed" as const };
   return (await res.json()) as {
     candles: Candle[];
-    source?: "okx" | "coingecko" | "seed";
+    source?: TapeSource;
     instId?: string;
     bar?: ChartBar;
+    mappedBar?: ChartBar;
   };
 }
 
-async function fetchDepth(symbol: string) {
-  const res = await fetch(`/api/markets?depth=${encodeURIComponent(symbol)}`);
+async function fetchDepth(symbol: string, source: LiveTape) {
+  const res = await fetch(`/api/markets?depth=${encodeURIComponent(symbol)}&${sourceQs(source)}`);
   if (!res.ok) return null;
   const json = (await res.json()) as { book?: DepthBook | null };
   return json.book ?? null;
 }
 
-async function fetchFunding(symbol: string) {
-  const res = await fetch(`/api/markets?funding=${encodeURIComponent(symbol)}`);
+async function fetchFunding(symbol: string, source: LiveTape) {
+  const res = await fetch(`/api/markets?funding=${encodeURIComponent(symbol)}&${sourceQs(source)}`);
   if (!res.ok) return null;
   const json = (await res.json()) as { funding?: FundingSnap | null };
   return json.funding ?? null;
@@ -62,9 +69,10 @@ export function TradeDesk() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
   const setMarkets = useHarness((s) => s.setMarkets);
+  const tapeSource = useHarness((s) => s.tapeSource);
   const q = useQuery({
-    queryKey: ["markets"],
-    queryFn: fetchMarkets,
+    queryKey: ["markets", tapeSource],
+    queryFn: () => fetchMarkets(tapeSource),
     refetchInterval: 12_000,
     enabled: mounted,
   });
@@ -168,25 +176,28 @@ function ChartPane() {
   const market = useHarness((s) => s.markets.find((m) => m.symbol === s.focus));
   const bar = useHarness((s) => s.chartBar);
   const setBar = useHarness((s) => s.setChartBar);
+  const tapeSource = useHarness((s) => s.tapeSource);
+  const setTapeSource = useHarness((s) => s.setTapeSource);
   const tape = useQuery({
-    queryKey: ["candles", focus, bar],
-    queryFn: () => fetchCandles(focus, bar),
+    queryKey: ["candles", focus, bar, tapeSource],
+    queryFn: () => fetchCandles(focus, bar, tapeSource),
     refetchInterval: bar === "1s" ? 2_000 : bar === "1m" ? 5_000 : bar === "5m" ? 20_000 : 45_000,
   });
   const depth = useQuery({
-    queryKey: ["depth", focus],
-    queryFn: () => fetchDepth(focus),
+    queryKey: ["depth", focus, tapeSource],
+    queryFn: () => fetchDepth(focus, tapeSource),
     refetchInterval: 4_000,
-    enabled: !!market && (market.venue === "spot" || market.venue === "perp"),
+    enabled: !!market && (market.venue === "spot" || market.venue === "perp" || tapeSource === "phoenix"),
   });
   const funding = useQuery({
-    queryKey: ["funding", focus],
-    queryFn: () => fetchFunding(focus),
+    queryKey: ["funding", focus, tapeSource],
+    queryFn: () => fetchFunding(focus, tapeSource),
     refetchInterval: 20_000,
-    enabled: market?.venue === "perp",
+    enabled: market?.venue === "perp" || tapeSource === "phoenix",
   });
   const candles = tape.data?.candles ?? [];
   const source = tape.data?.source ?? "seed";
+  const usedBar = tape.data?.mappedBar ?? bar;
   const spanMs =
     candles.length > 1 ? candles[candles.length - 1]!.t - candles[0]!.t : 0;
   const spanLabel =
@@ -223,9 +234,7 @@ function ChartPane() {
               </select>
             </label>
             <Badge>{market ? venueLabel(market.venue) : ""}</Badge>
-            <Badge tone={source === "okx" ? "up" : "muted"}>
-              {source === "okx" ? "OKX" : source === "coingecko" ? "CoinGecko" : "Local tape"}
-            </Badge>
+            {source !== tapeSource ? <Badge tone="muted">{tapeLabel(source)}</Badge> : null}
           </div>
           <p className="text-xs text-subtle">{market?.name}</p>
         </div>
@@ -238,6 +247,22 @@ function ChartPane() {
       </div>
 
       <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          {TAPE_SOURCES.map((s) => (
+            <button
+              key={s}
+              type="button"
+              title={TAPE_META[s].hint}
+              onClick={() => setTapeSource(s)}
+              className={cn(
+                "min-h-10 rounded-sm px-2 text-[11px] uppercase tracking-wide",
+                tapeSource === s ? "bg-raised text-fg" : "text-subtle hover:text-fg",
+              )}
+            >
+              {TAPE_META[s].label}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap gap-1">
           {OKX_BARS.map((b) => (
             <button
@@ -253,6 +278,10 @@ function ChartPane() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[11px] text-subtle">{TAPE_META[tapeSource].hint}</p>
         <div className="flex flex-wrap gap-3 font-mono text-[11px] tabular-nums text-subtle">
           {market?.bid && market.ask ? (
             <span>
@@ -262,7 +291,8 @@ function ChartPane() {
           ) : null}
           {candles.length ? (
             <span>
-              {candles.length} × {bar}
+              {candles.length} × {usedBar}
+              {usedBar !== bar ? ` (${bar}→${usedBar})` : ""}
               {spanLabel ? ` · ${spanLabel}` : ""}
             </span>
           ) : null}
@@ -280,11 +310,11 @@ function ChartPane() {
           {tape.isLoading && !candles.length ? (
             <div className="grid h-full place-items-center text-sm text-subtle">Loading tape…</div>
           ) : (
-            <PriceChart candles={candles} bar={bar} className="h-full" />
+            <PriceChart candles={candles} bar={usedBar} className="h-full" />
           )}
         </div>
         <div className="hidden h-72 overflow-hidden rounded-sm border border-border lg:block">
-          <DepthPane book={depth.data} last={market?.price} />
+          <DepthPane book={depth.data} last={market?.price} source={tapeSource} />
         </div>
       </div>
     </section>
@@ -481,6 +511,7 @@ function AgentPane() {
   const ctl = useVault();
   const seats = ctl.vault?.slots.filter((s) => s.status === "running") ?? [];
   const focus = useHarness((s) => s.focus);
+  const tapeSource = useHarness((s) => s.tapeSource);
   const submitTrade = useHarness((s) => s.submitTrade);
   const clearChat = useHarness((s) => s.clearChat);
   const [text, setText] = useState("");
@@ -532,6 +563,7 @@ function AgentPane() {
             : undefined,
           book: snapshot(),
           focus,
+          tapeSource,
         }),
       });
       if (!res.ok || !res.body) {

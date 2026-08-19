@@ -1,12 +1,15 @@
-import type { DepthBook } from "@/lib/types";
+import type { DepthBook, TapeSource } from "@/lib/types";
 import { cn, formatPx, formatQty } from "@/lib/utils";
+import { tapeLabel } from "@/lib/venues";
 
 export function DepthPane({
   book,
   last,
+  source,
 }: {
   book: DepthBook | null | undefined;
   last?: number;
+  source?: TapeSource;
 }) {
   const asks = [...(book?.asks ?? [])].slice(0, 8).reverse();
   const bids = (book?.bids ?? []).slice(0, 8);
@@ -15,7 +18,7 @@ export function DepthPane({
   if (!book || (!asks.length && !bids.length)) {
     return (
       <div className="grid h-full place-items-center px-3 text-center text-[11px] text-subtle">
-        Depth is live on OKX crypto pairs.
+        Depth is live on {tapeLabel(source ?? "okx")} crypto pairs.
       </div>
     );
   }

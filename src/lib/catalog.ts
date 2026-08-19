@@ -45,6 +45,10 @@ const CRYPTO: Array<{
   { symbol: "SOL", name: "Solana", id: "solana", base: 178 },
   { symbol: "HYPE", name: "Hyperliquid", id: "hyperliquid", base: 24.8 },
   { symbol: "DOGE", name: "Dogecoin", id: "dogecoin", base: 0.168 },
+  { symbol: "WIF", name: "dogwifhat", id: "dogwifcoin", base: 0.14 },
+  { symbol: "BONK", name: "Bonk", id: "bonk", base: 0.00002 },
+  { symbol: "PUMP", name: "Pump", id: "pump-fun", base: 0.003 },
+  { symbol: "JUP", name: "Jupiter", id: "jupiter-exchange-solana", base: 0.17 },
   { symbol: "XRP", name: "XRP", id: "ripple", base: 2.42 },
   { symbol: "BNB", name: "BNB", id: "binancecoin", base: 612 },
   { symbol: "ADA", name: "Cardano", id: "cardano", base: 0.78 },
@@ -127,7 +131,7 @@ export function buildStaticMarkets(now = Date.now()): Market[] {
     };
   });
 
-  const perps: Market[] = CRYPTO.slice(0, 5).map((c) => {
+  const perps: Market[] = CRYPTO.map((c) => {
     const m = spots.find((s) => s.symbol === c.symbol)!;
     return {
       ...m,
@@ -430,8 +434,8 @@ export const PLUGINS: PluginDef[] = [
     id: "market-data",
     name: "Market Data",
     kind: "market",
-    blurb: "OKX public tape for crypto spot and perps. Equities and prediction books stay on the local tape.",
-    source: "OKX + CoinGecko fallback",
+    blurb: "Live tape from OKX, Backpack, and Phoenix on Solana. Equities and prediction books stay local.",
+    source: "OKX · Backpack · Phoenix",
   },
   {
     id: "onchain",

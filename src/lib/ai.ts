@@ -65,12 +65,13 @@ export const FINANCE_TOOLS = [
     function: {
       name: "get_candles",
       description:
-        "OHLC candles for a symbol. Crypto comes from OKX. bar: 1s, 1m, 3m, 5m, 15m, 30m, 1H, 4H, 1D.",
+        "OHLC candles for a symbol. Crypto from the selected tape (OKX, Backpack, Phoenix). bar: 1s, 1m, 3m, 5m, 15m, 30m, 1H, 4H, 1D. Optional source: okx | backpack | phoenix.",
       parameters: {
         type: "object",
         properties: {
           symbol: { type: "string" },
           bar: { type: "string" },
+          source: { type: "string", description: "okx | backpack | phoenix" },
         },
         required: ["symbol"],
       },
@@ -157,7 +158,7 @@ export function buildSystemPrompt(input: {
     .slice(0, 24)
     .map(
       (m) =>
-        `${m.symbol.padEnd(12)} ${m.price.toPrecision(6)}  ${m.change24h >= 0 ? "+" : ""}${m.change24h.toFixed(2)}%  ${m.venue}`,
+        `${m.symbol.padEnd(12)} ${m.price.toPrecision(6)}  ${m.change24h >= 0 ? "+" : ""}${m.change24h.toFixed(2)}%  ${m.venue}  ${m.source ?? "seed"}`,
     )
     .join("\n");
 
@@ -170,7 +171,7 @@ Four pillars:
 - Models: you are the cognition (Grok or an ACP-connected local code agent).
 - Skills: investor judgment systems the user loaded.
 - Plugins: what you can see.
-- Execution: paper venues — spot, Hyperliquid-style perps, prediction markets, equities.
+- Execution: paper venues — spot, perps, prediction markets, equities. Tape is OKX, Backpack, or Phoenix.
 
 Rules:
 - Think like the loaded skills. If none are loaded, say so and reason plainly.

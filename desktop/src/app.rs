@@ -30,6 +30,9 @@ pub struct Desk {
     pair_input: Entity<InputState>,
     qty: String,
     tape_error: Option<String>,
+    pulling: bool,
+    pull_queued: bool,
+    pull_gen: u64,
     _focus: FocusHandle,
 }
 
@@ -53,10 +56,13 @@ impl Desk {
             pair_input,
             qty: "0.01".into(),
             tape_error: None,
+            pulling: false,
+            pull_queued: false,
+            pull_gen: 0,
             _focus: cx.focus_handle(),
         };
-        desk.pull();
         desk.arm_timer(cx);
+        desk.schedule_pull(cx);
         desk
     }
 
@@ -67,7 +73,7 @@ impl Desk {
                     .timer(Duration::from_secs(8))
                     .await;
                 this.update(cx, |this, cx| {
-                    this.pull();
+                    this.request_pull(cx);
                     if let Some(dev) = this.device.clone() {
                         cx.background_executor()
                             .spawn(async move {
@@ -75,7 +81,6 @@ impl Desk {
                             })
                             .detach();
                     }
-                    cx.notify();
                 })
                 .ok();
             }
@@ -83,30 +88,75 @@ impl Desk {
         .detach();
     }
 
-    fn pull(&mut self) {
-        match okx::tickers() {
-            Ok(rows) if !rows.is_empty() => {
-                self.tickers = rows;
-                self.tape_error = None;
-            }
-            Ok(_) => self.tape_error = Some("OKX returned no tickers".into()),
-            Err(err) => self.tape_error = Some(err.to_string()),
+    fn schedule_pull(&mut self, cx: &mut Context<Self>) {
+        self.pull_gen = self.pull_gen.wrapping_add(1);
+        let gen = self.pull_gen;
+        cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(80))
+                .await;
+            this.update(cx, |this, cx| {
+                if this.pull_gen == gen {
+                    this.request_pull(cx);
+                }
+            })
+            .ok();
+        })
+        .detach();
+    }
+
+    fn request_pull(&mut self, cx: &mut Context<Self>) {
+        if self.pulling {
+            self.pull_queued = true;
+            return;
         }
-        let limit = if self.bar == "1s" || self.bar == "1m" { 200 } else { 120 };
-        match okx::candles(&self.focus, &self.bar, limit) {
-            Ok(rows) if rows.len() > 4 => {
-                self.candles = rows;
-                self.status = format!(
-                    "OKX {} × {} · {}",
-                    self.candles.len(),
-                    self.bar,
-                    self.focus
-                )
-                .into();
-            }
-            Ok(_) => self.status = "not enough candles".into(),
-            Err(err) => self.status = format!("candles: {err}").into(),
-        }
+        self.pulling = true;
+        let focus = self.focus.clone();
+        let bar = self.bar.clone();
+        let limit = okx::candle_limit(&bar);
+        cx.spawn(async move |this, cx| {
+            let wanted_focus = focus.clone();
+            let wanted_bar = bar.clone();
+            let tape = cx
+                .background_executor()
+                .spawn(async move { okx::pull_tape(&focus, &bar, limit) })
+                .await;
+            this.update(cx, |this, cx| {
+                this.pulling = false;
+                let still_current = this.focus == wanted_focus && this.bar == wanted_bar;
+                if still_current {
+                    match tape.tickers {
+                        Ok(rows) if !rows.is_empty() => {
+                            this.tickers = rows;
+                            this.tape_error = None;
+                        }
+                        Ok(_) => this.tape_error = Some("OKX returned no tickers".into()),
+                        Err(err) => this.tape_error = Some(err.to_string()),
+                    }
+                    match tape.candles {
+                        Ok(rows) if rows.len() > 4 => {
+                            this.candles = rows;
+                            this.status = format!(
+                                "OKX {} × {} · {}",
+                                this.candles.len(),
+                                this.bar,
+                                this.focus
+                            )
+                            .into();
+                        }
+                        Ok(_) => this.status = "not enough candles".into(),
+                        Err(err) => this.status = format!("candles: {err}").into(),
+                    }
+                }
+                if this.pull_queued {
+                    this.pull_queued = false;
+                    this.request_pull(cx);
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
     }
 
     fn ticker(&self) -> Option<&Ticker> {
@@ -114,14 +164,22 @@ impl Desk {
     }
 
     fn set_focus(&mut self, symbol: &str, cx: &mut Context<Self>) {
+        if self.focus == symbol {
+            return;
+        }
         self.focus = symbol.into();
-        self.pull();
+        self.status = format!("loading {}…", self.focus).into();
+        self.schedule_pull(cx);
         cx.notify();
     }
 
     fn set_bar(&mut self, bar: &str, cx: &mut Context<Self>) {
+        if self.bar == bar {
+            return;
+        }
         self.bar = bar.into();
-        self.pull();
+        self.status = format!("loading {}…", self.bar).into();
+        self.schedule_pull(cx);
         cx.notify();
     }
 
@@ -181,18 +239,31 @@ impl Desk {
 
     fn pair(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let code = self.pair_input.read(cx).value().to_string();
-        match crate::pair::claim(&code, &crate::pair::origin()) {
-            Ok(dev) => {
-                self.status = format!("paired {}", dev.name).into();
-                self.log.push(format!("paired as {} ({})", dev.name, dev.code));
-                self.device = Some(dev);
-            }
-            Err(err) => {
-                self.status = format!("pair failed: {err}").into();
-                self.log.push(format!("pair  {err}"));
-            }
-        }
+        let origin = crate::pair::origin();
+        self.status = "claiming…".into();
         self.pair_input.update(cx, |input, cx| input.set_value("", window, cx));
+        cx.spawn(async move |this, cx| {
+            let result = cx
+                .background_executor()
+                .spawn(async move { crate::pair::claim(&code, &origin) })
+                .await;
+            this.update(cx, |this, cx| {
+                match result {
+                    Ok(dev) => {
+                        this.status = format!("paired {}", dev.name).into();
+                        this.log.push(format!("paired as {} ({})", dev.name, dev.code));
+                        this.device = Some(dev);
+                    }
+                    Err(err) => {
+                        this.status = format!("pair failed: {err}").into();
+                        this.log.push(format!("pair  {err}"));
+                    }
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
         cx.notify();
     }
 }

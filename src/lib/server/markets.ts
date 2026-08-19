@@ -1,6 +1,17 @@
 import { COINGECKO_IDS, buildStaticMarkets } from "../catalog";
 import { BAR_MS, barWindow, type OkxBar } from "../okx";
-import type { Candle, DepthBook, FundingSnap, Market } from "../types";
+import type { Candle, ChartBar, DepthBook, FundingSnap, Market, TapeSource } from "../types";
+import { mappedBar, parseTape } from "../venues";
+import {
+  applyBpTicker,
+  bpCandleLimit,
+  bpSymbol,
+  fetchBpCandles,
+  fetchBpDepth,
+  fetchBpFunding,
+  fetchBpTickers,
+} from "./backpack";
+import { fetchPhxCandles, fetchPhxDepth, fetchPhxFunding, fetchPhxMarks } from "./phoenix";
 import {
   applyOkxTicker,
   fetchOkxCandles,
@@ -13,9 +24,11 @@ import {
 
 type Cache<T> = { at: number; value: T };
 
+const LIVE: ReadonlySet<string> = new Set(["okx", "backpack", "phoenix"]);
+
 const g = globalThis as typeof globalThis & {
-  __aetherMarkets?: Cache<Market[]>;
-  __aetherCandles?: Map<string, Cache<{ candles: Candle[]; source: Market["source"] }>>;
+  __aetherTape?: Map<string, Cache<Market[]>>;
+  __aetherCandles?: Map<string, Cache<{ candles: Candle[]; source: Market["source"]; instId?: string; mappedBar?: ChartBar }>>;
   __aetherDepth?: Map<string, Cache<DepthBook>>;
   __aetherFunding?: Map<string, Cache<FundingSnap>>;
 };
@@ -32,38 +45,82 @@ function indexTickers(rows: OkxTicker[]): Map<string, OkxTicker> {
   return map;
 }
 
-export async function getMarkets(): Promise<Market[]> {
-  const hit = cache(g.__aetherMarkets, 8_000);
+function isLive(source: Market["source"] | undefined): boolean {
+  return !!source && LIVE.has(source);
+}
+
+export async function getMarkets(source: TapeSource = "okx"): Promise<Market[]> {
+  g.__aetherTape ??= new Map();
+  const key = source;
+  const hit = cache(g.__aetherTape.get(key), 8_000);
   if (hit) return hit;
   const base = buildStaticMarkets();
+  const tape = parseTape(source);
 
-  try {
-    const [spot, swap] = await Promise.all([
-      fetchOkxTickers("SPOT"),
-      fetchOkxTickers("SWAP"),
-    ]);
-    const byId = indexTickers([...spot, ...swap]);
-    for (const m of base) {
-      const inst = resolveOkxInst(m.symbol);
-      if (!inst) continue;
-      const applied = applyOkxTicker(m.price, byId.get(inst));
-      if (!applied) continue;
-      m.price = applied.price;
-      m.change24h = applied.change24h;
-      m.volume24h = applied.volume24h;
-      m.high24h = applied.high24h;
-      m.low24h = applied.low24h;
-      m.bid = applied.bid;
-      m.ask = applied.ask;
-      m.source = "okx";
-      if (m.spark.length) m.spark = [...m.spark.slice(1), applied.price];
+  if (tape === "backpack") {
+    try {
+      const rows = await fetchBpTickers();
+      const by = new Map(rows.map((r) => [r.symbol, r]));
+      for (const m of base) {
+        if (m.venue !== "spot" && m.venue !== "perp") continue;
+        const applied = applyBpTicker(by.get(bpSymbol(m.symbol)));
+        if (!applied) continue;
+        m.price = applied.price;
+        m.change24h = applied.change24h;
+        m.volume24h = applied.volume24h;
+        m.high24h = applied.high24h;
+        m.low24h = applied.low24h;
+        m.source = "backpack";
+        if (m.spark.length) m.spark = [...m.spark.slice(1), applied.price];
+      }
+    } catch {
+      /* CoinGecko below */
     }
-  } catch {
-    /* fall through to CoinGecko */
+  } else if (tape === "phoenix") {
+    try {
+      const rows = await fetchPhxMarks();
+      const by = new Map(rows.map((r) => [r.symbol, r]));
+      for (const m of base) {
+        if (m.venue === "predict") continue;
+        const hitMark = by.get(m.symbol.replace(/-PERP$/, "").toUpperCase());
+        if (!hitMark) continue;
+        m.price = hitMark.price;
+        m.change24h = hitMark.change24h;
+        m.source = "phoenix";
+        if (m.spark.length) m.spark = [...m.spark.slice(1), hitMark.price];
+      }
+    } catch {
+      /* CoinGecko below */
+    }
+  } else {
+    try {
+      const [spot, swap] = await Promise.all([
+        fetchOkxTickers("SPOT"),
+        fetchOkxTickers("SWAP"),
+      ]);
+      const byId = indexTickers([...spot, ...swap]);
+      for (const m of base) {
+        const inst = resolveOkxInst(m.symbol);
+        if (!inst) continue;
+        const applied = applyOkxTicker(m.price, byId.get(inst));
+        if (!applied) continue;
+        m.price = applied.price;
+        m.change24h = applied.change24h;
+        m.volume24h = applied.volume24h;
+        m.high24h = applied.high24h;
+        m.low24h = applied.low24h;
+        m.bid = applied.bid;
+        m.ask = applied.ask;
+        m.source = "okx";
+        if (m.spark.length) m.spark = [...m.spark.slice(1), applied.price];
+      }
+    } catch {
+      /* fall through to CoinGecko */
+    }
   }
 
   const missingCrypto = base.filter(
-    (m) => (m.venue === "spot" || m.venue === "perp") && m.source !== "okx" && m.coingeckoId,
+    (m) => (m.venue === "spot" || m.venue === "perp") && !isLive(m.source) && m.coingeckoId,
   );
   if (missingCrypto.length) {
     try {
@@ -78,7 +135,7 @@ export async function getMarkets(): Promise<Market[]> {
           { usd?: number; usd_24h_change?: number; usd_24h_vol?: number }
         >;
         for (const m of base) {
-          if (m.source === "okx") continue;
+          if (isLive(m.source)) continue;
           const cg = m.coingeckoId ? json[m.coingeckoId] : undefined;
           if (!cg?.usd) continue;
           m.price = cg.usd;
@@ -90,7 +147,7 @@ export async function getMarkets(): Promise<Market[]> {
           if (m.spark.length) m.spark = [...m.spark.slice(1), cg.usd];
         }
         for (const m of base) {
-          if (!m.symbol.endsWith("-PERP") || m.source === "okx") continue;
+          if (!m.symbol.endsWith("-PERP") || isLive(m.source) || m.source === "coingecko") continue;
           const spot = base.find((s) => s.symbol === m.symbol.replace("-PERP", "") && s.venue === "spot");
           if (spot) {
             m.price = spot.price * 1.0002;
@@ -109,7 +166,7 @@ export async function getMarkets(): Promise<Market[]> {
     if (!m.source) m.source = "seed";
   }
 
-  g.__aetherMarkets = { at: Date.now(), value: base };
+  g.__aetherTape.set(key, { at: Date.now(), value: base });
   return base;
 }
 
@@ -121,26 +178,56 @@ function candleTtl(bar: OkxBar): number {
   return 60_000;
 }
 
+export type CandlePack = {
+  candles: Candle[];
+  source: Market["source"];
+  instId?: string;
+  mappedBar?: ChartBar;
+};
+
 export async function getCandles(
   symbol: string,
   bar: OkxBar = "15m",
-): Promise<{ candles: Candle[]; source: Market["source"]; instId?: string }> {
+  source: TapeSource = "okx",
+): Promise<CandlePack> {
   g.__aetherCandles ??= new Map();
-  const key = `${symbol}:${bar}`;
+  const tape = parseTape(source);
+  const key = `${tape}:${symbol}:${bar}`;
   const hit = cache(g.__aetherCandles.get(key), candleTtl(bar));
   if (hit) return hit;
 
-  const instId = resolveOkxInst(symbol);
-  if (instId) {
-    const candles = await fetchOkxCandles(instId, bar, barWindow(bar).limit * barWindow(bar).pages);
+  if (tape === "backpack") {
+    const candles = await fetchBpCandles(symbol, bar, bpCandleLimit(bar));
     if (candles.length > 4) {
-      const packed = { candles, source: "okx" as const, instId };
+      const packed: CandlePack = { candles, source: "backpack", instId: bpSymbol(symbol), mappedBar: bar };
       g.__aetherCandles.set(key, { at: Date.now(), value: packed });
       return packed;
     }
+  } else if (tape === "phoenix") {
+    const candles = await fetchPhxCandles(symbol, bar);
+    if (candles.length > 4) {
+      const packed: CandlePack = {
+        candles,
+        source: "phoenix",
+        instId: symbol.replace(/-PERP$/, "").toUpperCase(),
+        mappedBar: mappedBar("phoenix", bar),
+      };
+      g.__aetherCandles.set(key, { at: Date.now(), value: packed });
+      return packed;
+    }
+  } else {
+    const instId = resolveOkxInst(symbol);
+    if (instId) {
+      const candles = await fetchOkxCandles(instId, bar, barWindow(bar).limit * barWindow(bar).pages);
+      if (candles.length > 4) {
+        const packed: CandlePack = { candles, source: "okx", instId, mappedBar: bar };
+        g.__aetherCandles.set(key, { at: Date.now(), value: packed });
+        return packed;
+      }
+    }
   }
 
-  const markets = await getMarkets();
+  const markets = await getMarkets(tape);
   const m = markets.find((x) => x.symbol === symbol);
   const cgId = m?.coingeckoId ?? COINGECKO_IDS[symbol.replace("-PERP", "")];
   if (cgId && (bar === "15m" || bar === "1H" || bar === "4H" || bar === "1D")) {
@@ -167,7 +254,7 @@ export async function getCandles(
           }
         }
         if (grouped.length > 4) {
-          const packed = { candles: grouped, source: "coingecko" as const };
+          const packed: CandlePack = { candles: grouped, source: "coingecko", mappedBar: bar };
           g.__aetherCandles.set(key, { at: Date.now(), value: packed });
           return packed;
         }
@@ -193,30 +280,42 @@ export async function getCandles(
     };
   });
   if (!candles.length) candles.push({ t: now, o: px, h: px, l: px, c: px, v: 0 });
-  const packed = { candles, source: "seed" as const };
+  const packed: CandlePack = { candles, source: "seed", mappedBar: bar };
   g.__aetherCandles.set(key, { at: Date.now(), value: packed });
   return packed;
 }
 
-export async function getDepth(symbol: string): Promise<DepthBook | null> {
+export async function getDepth(symbol: string, source: TapeSource = "okx"): Promise<DepthBook | null> {
   g.__aetherDepth ??= new Map();
-  const hit = cache(g.__aetherDepth.get(symbol), 4_000);
+  const tape = parseTape(source);
+  const key = `${tape}:${symbol}`;
+  const hit = cache(g.__aetherDepth.get(key), 4_000);
   if (hit) return hit;
-  const instId = resolveOkxInst(symbol);
-  if (!instId) return null;
-  const book = await fetchOkxDepth(instId, 16);
-  if (book) g.__aetherDepth.set(symbol, { at: Date.now(), value: book });
+  let book: DepthBook | null = null;
+  if (tape === "backpack") book = await fetchBpDepth(symbol);
+  else if (tape === "phoenix") book = await fetchPhxDepth(symbol);
+  else {
+    const instId = resolveOkxInst(symbol);
+    if (instId) book = await fetchOkxDepth(instId, 16);
+  }
+  if (book) g.__aetherDepth.set(key, { at: Date.now(), value: book });
   return book;
 }
 
-export async function getFunding(symbol: string): Promise<FundingSnap | null> {
+export async function getFunding(symbol: string, source: TapeSource = "okx"): Promise<FundingSnap | null> {
   g.__aetherFunding ??= new Map();
-  const hit = cache(g.__aetherFunding.get(symbol), 20_000);
+  const tape = parseTape(source);
+  const key = `${tape}:${symbol}`;
+  const hit = cache(g.__aetherFunding.get(key), 20_000);
   if (hit) return hit;
-  const inst = resolveOkxInst(symbol.endsWith("-PERP") ? symbol : `${symbol}-PERP`);
-  if (!inst) return null;
-  const snap = await fetchOkxFunding(inst);
-  if (snap) g.__aetherFunding.set(symbol, { at: Date.now(), value: snap });
+  let snap: FundingSnap | null = null;
+  if (tape === "backpack") snap = await fetchBpFunding(symbol);
+  else if (tape === "phoenix") snap = await fetchPhxFunding(symbol);
+  else {
+    const inst = resolveOkxInst(symbol.endsWith("-PERP") ? symbol : `${symbol}-PERP`);
+    if (inst) snap = await fetchOkxFunding(inst);
+  }
+  if (snap) g.__aetherFunding.set(key, { at: Date.now(), value: snap });
   return snap;
 }
 
@@ -261,3 +360,5 @@ export function newsWire(query: string) {
     ts: Date.now() - i * 3_600_000,
   }));
 }
+
+
