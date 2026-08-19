@@ -24,15 +24,16 @@
 - [ ] Memory Desk+ billing UI
 - [ ] Real order routing (product milestone)
 
-## Batch 3 — current
+## Batch 3 — mostly landed
 
-**Theme:** indicator depth on desktop + keep money boundary crystal clear.
+**Theme:** indicator depth on desktop + money boundary clarity + SEO docs.
 
 - [x] Expand desktop indicators: SMA20, Bollinger, MACD (+ existing EMA/RSI)
-- [x] Desktop indicator toggle row (same ids as web: ema20, ema50, sma20, bb, rsi, macd)
-- [ ] Web: verify Privy mint path end-to-end when `PRIVY_*` set (ops, not code)
-- [ ] Shared indicator catalog doc (web list ↔ desktop subset)
-- [ ] SEO/meta pass on marketing routes if still thin
+- [x] Desktop indicator toggle row (ids: ema20, ema50, sma20, bb, rsi, macd)
+- [x] Shared indicator catalog — [`docs/INDICATORS.md`](docs/INDICATORS.md)
+- [x] Privy ops checklist — [`docs/PRIVY_CHECKLIST.md`](docs/PRIVY_CHECKLIST.md)
+- [x] SEO: `pageHead` og/twitter completeness; sitemap/robots already wired to `SITE_PAGES`
+- [ ] Deploy-time Privy mint verification (ops on your host with `PRIVY_*`)
 - [ ] Optional: desktop SSE tip stream when origin is up
 
 ## Batch 4 — later
