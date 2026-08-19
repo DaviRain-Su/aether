@@ -1,0 +1,14 @@
+name = "aether-control"
+main = "src/index.ts"
+compatibility_date = "2026-04-01"
+
+[durable_objects]
+bindings = [
+  { name = "USER_VAULT", class_name = "UserVault" },
+  { name = "DEVICE_HUB", class_name = "DeviceHub" },
+  { name = "RELAY_ROOM", class_name = "RelayRoom" },
+]
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["UserVault", "DeviceHub", "RelayRoom"]

@@ -1,0 +1,1 @@
+import{l as e,z as t}from"./link-CvvNBLb-.js";import{n}from"./button-vZpsxC1-.js";t();var r=e();function i({className:e,...t}){return(0,r.jsx)(`input`,{className:n(`flex h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm text-fg outline-none placeholder:text-subtle focus-visible:border-accent/50`,e),...t})}export{i as t};
