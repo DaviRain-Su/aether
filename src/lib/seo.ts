@@ -57,18 +57,22 @@ export const SITE_PAGES = [
   },
 ] as const;
 
-export function pageHead(title: string, description: string) {
+export function pageHead(title: string, description: string, path?: string) {
   const full = title === APP_NAME ? APP_NAME : `${title} · ${APP_NAME}`;
-  return {
-    meta: [
-      { title: full },
-      { name: "description", content: description },
-      { property: "og:title", content: full },
-      { property: "og:description", content: description },
-      { name: "twitter:title", content: full },
-      { name: "twitter:description", content: description },
-    ],
-  };
+  const meta: Array<Record<string, string>> = [
+    { title: full },
+    { name: "description", content: description },
+    { property: "og:type", content: "website" },
+    { property: "og:title", content: full },
+    { property: "og:description", content: description },
+    { name: "twitter:card", content: "summary_large_image" },
+    { name: "twitter:title", content: full },
+    { name: "twitter:description", content: description },
+  ];
+  if (path) {
+    meta.push({ name: "aether:path", content: path });
+  }
+  return { meta };
 }
 
 export function jsonLd(host?: string) {
