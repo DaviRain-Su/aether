@@ -1,6 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { Copy } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell, PageIntro } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,8 +10,16 @@ import { equityOf } from "@/lib/book";
 import { pageHead } from "@/lib/seo";
 import { useHarness } from "@/lib/store";
 import { cn, maskMoney, shortAddr } from "@/lib/utils";
-import { useLiveWallet } from "@/lib/wallet/use-live-wallet";
+import {
+  connectExternalEvm,
+  detectExternalKind,
+  disconnectExternal,
+  loadExternalConnection,
+  providerLabel,
+  type ExternalConnection,
+} from "@/lib/wallet/external";
 import type { LiveWallet } from "@/lib/wallet/types";
+import { useLiveWallet } from "@/lib/wallet/use-live-wallet";
 
 export const Route = createFileRoute("/accounts")({
   component: AccountsPage,
@@ -39,6 +47,33 @@ function AccountsPage() {
     : (user?.displayName ?? user?.primaryEmail ?? "you");
   const snap = live.snap;
   const minted = snap?.minted ?? false;
+  const [external, setExternal] = useState<ExternalConnection | null>(null);
+  const [extBusy, setExtBusy] = useState(false);
+  const [extErr, setExtErr] = useState<string | null>(null);
+  const detected = detectExternalKind();
+
+  useEffect(() => {
+    setExternal(loadExternalConnection());
+  }, []);
+
+  async function onConnectExternal() {
+    setExtBusy(true);
+    setExtErr(null);
+    try {
+      const conn = await connectExternalEvm();
+      setExternal(conn);
+    } catch (e) {
+      setExtErr(e instanceof Error ? e.message : "Connect failed");
+    } finally {
+      setExtBusy(false);
+    }
+  }
+
+  function onDisconnectExternal() {
+    disconnectExternal();
+    setExternal(null);
+    setExtErr(null);
+  }
 
   return (
     <AppShell>
@@ -149,6 +184,48 @@ function AccountsPage() {
               </Button>
             )}
           </SignedIn>
+        </article>
+
+        <article className="bg-bg px-4 py-8 md:px-6 md:col-span-2">
+          <p className="text-[11px] uppercase tracking-[0.18em] text-subtle">External wallet</p>
+          <h2 className="font-display mt-2 text-2xl">Connect an existing wallet</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted">
+            Optional. OKX Wallet, MetaMask, or any injected EVM provider. This is{" "}
+            <span className="text-fg">not</span> the Privy embedded path and not the paper book.
+            Keys stay in the extension; Aether only remembers the address on this browser.
+          </p>
+          <dl className="mt-6 max-w-xl space-y-3 text-sm">
+            <div className="flex justify-between gap-4 border-b border-border py-2">
+              <dt className="text-subtle">Detected</dt>
+              <dd className="font-mono">{providerLabel(detected)}</dd>
+            </div>
+            <div className="flex justify-between gap-4 border-b border-border py-2">
+              <dt className="text-subtle">Connected</dt>
+              <dd className="font-mono">
+                {external
+                  ? `${providerLabel(external.kind)} · ${external.address.slice(0, 6)}…${external.address.slice(-4)}`
+                  : "—"}
+              </dd>
+            </div>
+            {external?.chainId ? (
+              <div className="flex justify-between gap-4 border-b border-border py-2">
+                <dt className="text-subtle">Chain id</dt>
+                <dd className="font-mono">{external.chainId}</dd>
+              </div>
+            ) : null}
+          </dl>
+          {extErr ? <p className="mt-3 text-sm text-down">{extErr}</p> : null}
+          <div className="mt-6 flex flex-wrap gap-2">
+            {external ? (
+              <Button size="sm" variant="secondary" onClick={onDisconnectExternal}>
+                Disconnect
+              </Button>
+            ) : (
+              <Button size="sm" disabled={extBusy || detected === "none"} onClick={() => void onConnectExternal()}>
+                {extBusy ? "Connecting…" : detected === "none" ? "Install OKX or MetaMask" : "Connect wallet"}
+              </Button>
+            )}
+          </div>
         </article>
 
         <article className="bg-bg px-4 py-8 md:px-6">
