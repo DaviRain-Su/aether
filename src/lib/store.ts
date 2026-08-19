@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { applyTrade, emptyBook, snapshotOf, type BookState } from "./book";
+import { emptyBook, snapshotOf, type BookState } from "./book";
+import { executePaper } from "./execution";
 import { BUILTIN_MODELS, STARTING_CASH, buildStaticMarkets } from "./catalog";
 import type {
   AcpAgentConfig,
@@ -148,8 +149,9 @@ export const useHarness = create<HarnessState>()(
       setKillSwitch: (killSwitch) => set({ killSwitch }),
       submitTrade: (t) => {
         const s = get();
-        const result = applyTrade(asBook(s), s.markets, t);
-        if (result.error) return { ok: false, error: result.error };
+        // Paper only — live path is hard-off in src/lib/execution/router.ts
+        const result = executePaper(asBook(s), s.markets, t);
+        if (!result.ok) return { ok: false, error: result.error };
         const before = s.positions.find((p) => p.symbol === t.symbol);
         set({
           cash: result.book.cash,
