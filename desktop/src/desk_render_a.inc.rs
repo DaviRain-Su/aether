@@ -237,6 +237,17 @@ fn bar_row(desk: &Desk, cx: &mut Context<Desk>) -> impl IntoElement {
             })),
         )
         .child(
+            div().flex().gap_1().children(crate::indicators::INDICATOR_IDS.iter().map(|id| {
+                let key = (*id).to_string();
+                let active = desk.active_indicators.iter().any(|x| x == *id);
+                Button::new(SharedString::from(format!("ind-{id}")))
+                    .label(*id)
+                    .small()
+                    .selected(active)
+                    .on_click(cx.listener(move |this, _, _, cx| this.toggle_indicator(&key, cx)))
+            })),
+        )
+        .child(
             div()
                 .flex()
                 .items_center()
