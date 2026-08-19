@@ -107,6 +107,7 @@ migrations/    Postgres / PGLite
 - [`docs/WALLET.md`](docs/WALLET.md) — paper vs live, Privy vs OKX Connect
 - [`docs/INDICATORS.md`](docs/INDICATORS.md) — Web ↔ desktop indicator ids
 - [`docs/PRIVY_CHECKLIST.md`](docs/PRIVY_CHECKLIST.md) — deploy-time mint verification
+- [`docs/EXECUTION.md`](docs/EXECUTION.md) — paper vs live tickets (live hard-off)
 - [`ROADMAP.md`](ROADMAP.md) — batches and goals
 
 ## Not this product
