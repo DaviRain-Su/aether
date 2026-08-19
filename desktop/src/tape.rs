@@ -121,7 +121,7 @@ fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T> {
     Ok(env)
 }
 
-fn from_origin(origin: &str, source: &str, focus: &str, bar: &str) -> Result<Pull> {
+fn from_origin(origin: &str, source: &str, focus: &str, bar: &str, before: Option<i64>) -> Result<Pull> {
     let markets: Vec<MarketRow> = get_json(&format!("{origin}/api/markets?source={source}"))?;
     let tickers: Vec<Ticker> = markets
         .into_iter()
@@ -142,9 +142,13 @@ fn from_origin(origin: &str, source: &str, focus: &str, bar: &str) -> Result<Pul
         })
         .collect();
 
-    let pack: CandlePack = get_json(&format!(
+    let mut candles_url = format!(
         "{origin}/api/markets?candles={focus}&bar={bar}&source={source}"
-    ))?;
+    );
+    if let Some(b) = before {
+        candles_url.push_str(&format!("&before={b}"));
+    }
+    let pack: CandlePack = get_json(&candles_url)?;
     let candles: Vec<Candle> = pack
         .candles
         .into_iter()
@@ -191,9 +195,24 @@ fn from_origin(origin: &str, source: &str, focus: &str, bar: &str) -> Result<Pul
 
 /// Same tape as the web desk when origin is up. Falls back to OKX direct.
 pub fn pull(source: &str, focus: &str, bar: &str) -> Pull {
+    pull_before(source, focus, bar, None)
+}
+
+/// History page: candles strictly older than `before` (unix ms), for scroll-back parity with Web.
+pub fn pull_before(source: &str, focus: &str, bar: &str, before: Option<i64>) -> Pull {
     let origin = pair::origin();
-    if let Ok(pack) = from_origin(&origin, source, focus, bar) {
+    if let Ok(pack) = from_origin(&origin, source, focus, bar, before) {
         return pack;
+    }
+    // Direct OKX fallback only for live tip (no before) — history needs origin.
+    if before.is_some() {
+        return Pull {
+            tickers: vec![],
+            candles: vec![],
+            depth: Depth::default(),
+            funding: None,
+            source: source.into(),
+        };
     }
     let limit = okx::candle_limit(bar);
     let fallback = okx::pull_tape(focus, bar, limit);
