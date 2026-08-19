@@ -41,6 +41,7 @@ pub struct Desk {
     wallet: crate::wallet::WalletSnap,
     has_more: bool,
     loading_older: bool,
+    active_indicators: Vec<String>,
     _focus: FocusHandle,
 }
 
@@ -78,6 +79,7 @@ impl Desk {
             wallet: crate::wallet::WalletSnap::default(),
             has_more: true,
             loading_older: false,
+            active_indicators: crate::indicators::default_active(),
             _focus: cx.focus_handle(),
         };
         desk.arm_timer(cx);
@@ -167,18 +169,14 @@ impl Desk {
                             this.candles.drain(0..drop);
                         }
                         let series = crate::indicators::compute(&this.candles);
-                        let rsi = series.rsi.iter().rev().find_map(|v| *v);
-                        let e20 = series.ema20.iter().rev().find_map(|v| *v);
-                        let e50 = series.ema50.iter().rev().find_map(|v| *v);
+                        let tips = crate::indicators::status_tips(&series, &this.active_indicators);
                         this.status = format!(
-                            "{} {}×{} · {}{}{}{}",
+                            "{} {}×{} · {}{}",
                             tape::label(&this.tape),
                             this.candles.len(),
                             this.bar,
                             this.focus,
-                            e20.map(|v| format!(" · EMA20 {v:.2}")).unwrap_or_default(),
-                            e50.map(|v| format!(" EMA50 {v:.2}")).unwrap_or_default(),
-                            rsi.map(|r| format!(" · RSI {r:.1}")).unwrap_or_default()
+                            tips
                         )
                         .into();
                     } else if this.candles.len() <= 4 {
@@ -369,6 +367,28 @@ impl Desk {
             .ok();
         })
         .detach();
+    }
+
+    fn toggle_indicator(&mut self, id: &str, cx: &mut Context<Self>) {
+        if let Some(i) = self.active_indicators.iter().position(|x| x == id) {
+            self.active_indicators.remove(i);
+        } else {
+            self.active_indicators.push(id.into());
+        }
+        if self.candles.len() > 4 {
+            let series = crate::indicators::compute(&self.candles);
+            let tips = crate::indicators::status_tips(&series, &self.active_indicators);
+            self.status = format!(
+                "{} {}×{} · {}{}",
+                tape::label(&self.tape),
+                self.candles.len(),
+                self.bar,
+                self.focus,
+                tips
+            )
+            .into();
+        }
+        cx.notify();
     }
 
     fn load_older(&mut self, cx: &mut Context<Self>) {
