@@ -31,8 +31,8 @@ export const PLANS: Plan[] = [
   },
   {
     id: "desk",
-    name: "Desk",
-    blurb: "A few machines. Grok plus a local code agent. Cloud memory syncs them.",
+    name: "Desk+",
+    blurb: "A few machines. Grok plus a local code agent. Cloud memory syncs web and desktop.",
     devices: 3,
     agents: 4,
     seatsPerDevice: 2,

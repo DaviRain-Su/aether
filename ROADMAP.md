@@ -21,12 +21,9 @@
 - [ ] Canvas EMA overlays on CandlestickChart (blocked: no series API — tips + toggles interim)
 - [ ] Desktop native WS (optional; 2s poll is baseline)
 - [ ] External wallet Connect beside Privy
-- [ ] Memory Desk+ billing UI
 - [ ] Real order routing (product milestone)
 
 ## Batch 3 — mostly landed
-
-**Theme:** indicator depth on desktop + money boundary clarity + SEO docs.
 
 - [x] Expand desktop indicators: SMA20, Bollinger, MACD (+ existing EMA/RSI)
 - [x] Desktop indicator toggle row (ids: ema20, ema50, sma20, bb, rsi, macd)
@@ -36,12 +33,14 @@
 - [ ] Deploy-time Privy mint verification (ops on your host with `PRIVY_*`)
 - [ ] Optional: desktop SSE tip stream when origin is up
 
-## Batch 4 — later
+## Batch 4 — in progress
 
-- External wallets (OKX Connect / injected) as *additional* path
-- Memory subscription surface (Desk+ / Floor)
-- Real-money execution adapters (explicit, separate from paper book)
-- Custom GPUI canvas chart with overlays + wheel zoom (replace CandlestickChart)
+- [x] Memory Desk+ billing surface on `/memory` (plan cards, quota bar, link to Fleet)
+- [x] Plan catalog names Desk+ consistently (`plans.ts`)
+- [ ] Payment checkout (Stripe or similar) — still **Soon**
+- [ ] External wallets (OKX Connect / injected) as *additional* path
+- [ ] Real-money execution adapters (explicit, separate from paper book)
+- [ ] Custom GPUI canvas chart with overlays + wheel zoom (replace CandlestickChart)
 
 ## Money boundary
 
