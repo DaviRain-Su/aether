@@ -20,7 +20,6 @@
 - [x] Desktop EMA / RSI (and more) status tips from SeriesSet
 - [ ] Canvas EMA overlays on CandlestickChart (blocked: no series API — tips + toggles interim)
 - [ ] Desktop native WS (optional; 2s poll is baseline)
-- [ ] External wallet Connect beside Privy
 - [ ] Real order routing (product milestone)
 
 ## Batch 3 — mostly landed
@@ -37,8 +36,8 @@
 
 - [x] Memory Desk+ billing surface on `/memory` (plan cards, quota bar, link to Fleet)
 - [x] Plan catalog names Desk+ consistently (`plans.ts`)
+- [x] External wallets (injected OKX / MetaMask) on Accounts — client connect only
 - [ ] Payment checkout (Stripe or similar) — still **Soon**
-- [ ] External wallets (OKX Connect / injected) as *additional* path
 - [ ] Real-money execution adapters (explicit, separate from paper book)
 - [ ] Custom GPUI canvas chart with overlays + wheel zoom (replace CandlestickChart)
 
@@ -48,6 +47,6 @@
 | --- | --- |
 | Paper book | Simulator — all tickets today |
 | Live wallet | Privy embedded after Google — real RPC balances only |
-| External | Optional later |
+| External | Injected connect on Accounts (browser only; not custody)
 
 See [`docs/WALLET.md`](docs/WALLET.md).
