@@ -16,10 +16,11 @@
 - [x] Desktop 2s timer + `merge_candles` + RSI tip in status
 - [x] Shared bar list includes 3m / 30m on desktop
 
-## Batch 2 (next)
+## Batch 2
 
-- [ ] Desktop canvas overlays from `SeriesSet` (EMA lines on chart, not only status RSI)
-- [ ] Desktop history scroll-back (`before` pagination parity with Web)
+- [x] Desktop history scroll-back (`before` + Older button) \u2014 parity with Web
+- [x] Desktop EMA20 / EMA50 / RSI tips in status (SeriesSet)
+- [ ] Desktop canvas EMA line overlays on CandlestickChart (gpui-component has no series API yet \u2014 tips are interim)
 - [ ] Desktop SSE/WS client for sub-2s tips (optional; 2s poll is acceptable baseline)
 - [ ] External wallet connect (OKX Connect / injected) **beside** Privy embedded \u2014 see `docs/WALLET.md`
 - [ ] Memory Desk+ billing surface
