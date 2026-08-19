@@ -9,7 +9,7 @@ impl Render for Desk {
                 .map(|t| (t.symbol.clone(), t.last))
                 .collect::<Vec<_>>(),
         );
-        let candles = self.candles.clone();
+        let candles = self.visible_candles();
         let bar = self.bar.clone();
         let log = self.log.iter().rev().take(12).rev().cloned().collect::<Vec<_>>();
         let lessons: Vec<_> = self
@@ -270,6 +270,24 @@ fn bar_row(desk: &Desk, cx: &mut Context<Desk>) -> impl IntoElement {
                         .small()
                         .disabled(!desk.has_more || desk.loading_older)
                         .on_click(cx.listener(|this, _, _, cx| this.load_older(cx))),
+                )
+                .child(
+                    Button::new("zin")
+                        .label("+")
+                        .small()
+                        .on_click(cx.listener(|this, _, _, cx| this.zoom_in(cx))),
+                )
+                .child(
+                    Button::new("zout")
+                        .label("−")
+                        .small()
+                        .on_click(cx.listener(|this, _, _, cx| this.zoom_out(cx))),
+                )
+                .child(
+                    Button::new("zreset")
+                        .label(format!("{} bars", desk.view_len.min(desk.candles.len().max(1))))
+                        .small()
+                        .on_click(cx.listener(|this, _, _, cx| this.zoom_reset(cx))),
                 ),
         )
 }
