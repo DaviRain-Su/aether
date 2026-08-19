@@ -238,8 +238,27 @@ fn bar_row(desk: &Desk, cx: &mut Context<Desk>) -> impl IntoElement {
         )
         .child(
             div()
-                .text_xs()
-                .text_color(cx.theme().muted_foreground)
-                .child(tape::hint(&desk.tape)),
+                .flex()
+                .items_center()
+                .gap_2()
+                .child(
+                    div()
+                        .text_xs()
+                        .text_color(cx.theme().muted_foreground)
+                        .child(tape::hint(&desk.tape)),
+                )
+                .child(
+                    Button::new("older")
+                        .label(if desk.loading_older {
+                            "…"
+                        } else if desk.has_more {
+                            "Older"
+                        } else {
+                            "Start"
+                        })
+                        .small()
+                        .disabled(!desk.has_more || desk.loading_older)
+                        .on_click(cx.listener(|this, _, _, cx| this.load_older(cx))),
+                ),
         )
 }
