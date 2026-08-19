@@ -3,26 +3,19 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { Eraser, OctagonX, Send, Square } from "lucide-react";
 import { venueLabel } from "@/lib/catalog";
-import { OKX_BARS } from "@/lib/okx";
 import { readGuestId, useVault } from "@/lib/control-plane/use-vault";
 import { recordFillFn } from "@/lib/memory/fns";
 import { modelOptions, useHarness } from "@/lib/store";
 import type {
-  Candle,
-  ChartBar,
   ChatMessage,
-  DepthBook,
-  FundingSnap,
   Market,
   ProposedTrade,
-  TapeSource,
   ToolTrace,
 } from "@/lib/types";
-import { cn, formatPct, formatPx, formatQty, formatUsd } from "@/lib/utils";
-import { TAPE_META, TAPE_SOURCES, tapeLabel, type LiveTape } from "@/lib/venues";
+import { cn, formatQty, formatUsd } from "@/lib/utils";
+import { type LiveTape } from "@/lib/venues";
 import { Mark } from "./app-shell";
-import { DepthPane } from "./depth-book";
-import { PriceChart } from "./price-chart";
+import { ChartPane } from "./chart-pane";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -35,34 +28,6 @@ async function fetchMarkets(source: LiveTape): Promise<Market[]> {
   const res = await fetch(`/api/markets?${sourceQs(source)}`);
   if (!res.ok) throw new Error("markets");
   return (await res.json()) as Market[];
-}
-
-async function fetchCandles(symbol: string, bar: ChartBar, source: LiveTape) {
-  const res = await fetch(
-    `/api/markets?candles=${encodeURIComponent(symbol)}&bar=${encodeURIComponent(bar)}&${sourceQs(source)}`,
-  );
-  if (!res.ok) return { candles: [] as Candle[], source: "seed" as const };
-  return (await res.json()) as {
-    candles: Candle[];
-    source?: TapeSource;
-    instId?: string;
-    bar?: ChartBar;
-    mappedBar?: ChartBar;
-  };
-}
-
-async function fetchDepth(symbol: string, source: LiveTape) {
-  const res = await fetch(`/api/markets?depth=${encodeURIComponent(symbol)}&${sourceQs(source)}`);
-  if (!res.ok) return null;
-  const json = (await res.json()) as { book?: DepthBook | null };
-  return json.book ?? null;
-}
-
-async function fetchFunding(symbol: string, source: LiveTape) {
-  const res = await fetch(`/api/markets?funding=${encodeURIComponent(symbol)}&${sourceQs(source)}`);
-  if (!res.ok) return null;
-  const json = (await res.json()) as { funding?: FundingSnap | null };
-  return json.funding ?? null;
 }
 
 export function TradeDesk() {
@@ -169,158 +134,6 @@ function MarketList() {
   );
 }
 
-function ChartPane() {
-  const focus = useHarness((s) => s.focus);
-  const setFocus = useHarness((s) => s.setFocus);
-  const markets = useHarness((s) => s.markets);
-  const market = useHarness((s) => s.markets.find((m) => m.symbol === s.focus));
-  const bar = useHarness((s) => s.chartBar);
-  const setBar = useHarness((s) => s.setChartBar);
-  const tapeSource = useHarness((s) => s.tapeSource);
-  const setTapeSource = useHarness((s) => s.setTapeSource);
-  const tape = useQuery({
-    queryKey: ["candles", focus, bar, tapeSource],
-    queryFn: () => fetchCandles(focus, bar, tapeSource),
-    refetchInterval: bar === "1s" ? 2_000 : bar === "1m" ? 5_000 : bar === "5m" ? 20_000 : 45_000,
-  });
-  const depth = useQuery({
-    queryKey: ["depth", focus, tapeSource],
-    queryFn: () => fetchDepth(focus, tapeSource),
-    refetchInterval: 4_000,
-    enabled: !!market && (market.venue === "spot" || market.venue === "perp" || tapeSource === "phoenix"),
-  });
-  const funding = useQuery({
-    queryKey: ["funding", focus, tapeSource],
-    queryFn: () => fetchFunding(focus, tapeSource),
-    refetchInterval: 20_000,
-    enabled: market?.venue === "perp" || tapeSource === "phoenix",
-  });
-  const candles = tape.data?.candles ?? [];
-  const source = tape.data?.source ?? "seed";
-  const usedBar = tape.data?.mappedBar ?? bar;
-  const spanMs =
-    candles.length > 1 ? candles[candles.length - 1]!.t - candles[0]!.t : 0;
-  const spanLabel =
-    spanMs >= 86_400_000
-      ? `${(spanMs / 86_400_000).toFixed(1)}d`
-      : spanMs >= 3_600_000
-        ? `${(spanMs / 3_600_000).toFixed(1)}h`
-        : spanMs >= 60_000
-          ? `${Math.round(spanMs / 60_000)}m`
-          : spanMs
-            ? `${Math.round(spanMs / 1000)}s`
-            : "";
-  const spread =
-    market?.bid && market.ask ? ((market.ask - market.bid) / market.price) * 10_000 : null;
-
-  return (
-    <section className="border-b border-border px-3 pt-3 pb-2">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="hidden text-lg font-medium lg:block">{market?.symbol ?? focus}</h2>
-            <label className="lg:hidden">
-              <span className="sr-only">Symbol</span>
-              <select
-                value={focus}
-                onChange={(e) => setFocus(e.target.value)}
-                className="h-10 rounded-sm border border-border bg-surface px-2 text-sm text-fg"
-              >
-                {markets.map((m) => (
-                  <option key={m.symbol} value={m.symbol}>
-                    {m.symbol}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Badge>{market ? venueLabel(market.venue) : ""}</Badge>
-            {source !== tapeSource ? <Badge tone="muted">{tapeLabel(source)}</Badge> : null}
-          </div>
-          <p className="text-xs text-subtle">{market?.name}</p>
-        </div>
-        <div className="text-right">
-          <div className="font-mono text-xl tabular-nums">
-            {market ? formatUsd(market.price) : "—"}
-          </div>
-          {market ? <Mark value={market.change24h} /> : null}
-        </div>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-1">
-          {TAPE_SOURCES.map((s) => (
-            <button
-              key={s}
-              type="button"
-              title={TAPE_META[s].hint}
-              onClick={() => setTapeSource(s)}
-              className={cn(
-                "min-h-10 rounded-sm px-2 text-[11px] uppercase tracking-wide",
-                tapeSource === s ? "bg-raised text-fg" : "text-subtle hover:text-fg",
-              )}
-            >
-              {TAPE_META[s].label}
-            </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {OKX_BARS.map((b) => (
-            <button
-              key={b}
-              type="button"
-              onClick={() => setBar(b)}
-              className={cn(
-                "min-h-10 rounded-sm px-2 text-[11px] uppercase tracking-wide",
-                bar === b ? "bg-raised text-fg" : "text-subtle hover:text-fg",
-              )}
-            >
-              {b}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] text-subtle">{TAPE_META[tapeSource].hint}</p>
-        <div className="flex flex-wrap gap-3 font-mono text-[11px] tabular-nums text-subtle">
-          {market?.bid && market.ask ? (
-            <span>
-              {formatPx(market.bid)} / {formatPx(market.ask)}
-              {spread !== null ? ` · ${spread.toFixed(1)} bp` : ""}
-            </span>
-          ) : null}
-          {candles.length ? (
-            <span>
-              {candles.length} × {usedBar}
-              {usedBar !== bar ? ` (${bar}→${usedBar})` : ""}
-              {spanLabel ? ` · ${spanLabel}` : ""}
-            </span>
-          ) : null}
-          {market ? <span>24h {formatUsd(market.volume24h, 0)}</span> : null}
-          {funding.data ? (
-            <span className={funding.data.rate >= 0 ? "text-up" : "text-down"}>
-              fund {formatPct(funding.data.rate * 100, 4)}
-            </span>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="mt-2 grid gap-2 lg:grid-cols-[minmax(0,1fr)_11rem]">
-        <div className="h-56 md:h-72">
-          {tape.isLoading && !candles.length ? (
-            <div className="grid h-full place-items-center text-sm text-subtle">Loading tape…</div>
-          ) : (
-            <PriceChart candles={candles} bar={usedBar} className="h-full" />
-          )}
-        </div>
-        <div className="hidden h-72 overflow-hidden rounded-sm border border-border lg:block">
-          <DepthPane book={depth.data} last={market?.price} source={tapeSource} />
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function OrderTicket() {
   const market = useHarness((s) => s.markets.find((m) => m.symbol === s.focus));
   const submit = useHarness((s) => s.submitTrade);
@@ -360,7 +173,7 @@ function OrderTicket() {
   return (
     <section className="border-b border-border px-3 py-3">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs uppercase tracking-[0.16em] text-subtle">Ticket</p>
+        <p className="text-xs uppercase tracking-[0.16em] text-subtle">Ticket · Paper</p>
         <button
           type="button"
           onClick={() => setKill(!kill)}
@@ -624,24 +437,6 @@ function AgentPane() {
                 },
               }).catch(() => undefined);
             }
-          } else if (ev.type === "memory") {
-            /* strip refreshes via event below */
-          } else if (ev.type === "acp") {
-            patch(aid, {
-              acp: {
-                sessionId: ev.sessionId as string | undefined,
-                stopReason: ev.method as string | undefined,
-              },
-            });
-          } else if (ev.type === "relay") {
-            const hops = (useHarness.getState().messages.find((m) => m.id === aid)?.relay ??
-              []) as Array<{ from: string; to: string; method: string }>;
-            hops.push({
-              from: String(ev.from ?? ""),
-              to: String(ev.to ?? ""),
-              method: String(ev.method ?? ""),
-            });
-            patch(aid, { relay: hops });
           } else if (ev.type === "error") {
             acc = acc || String(ev.message);
             patch(aid, { content: acc });
@@ -660,7 +455,6 @@ function AgentPane() {
   const prompts = [
     `What is the tape saying about ${focus}?`,
     "Size a probe from the loaded skill.",
-    "I lost money shorting SOL into a liquidity expansion. Remember that.",
     "Review the book and cut anything that violates risk.",
   ];
 
@@ -698,7 +492,6 @@ function AgentPane() {
             onClick={() => clearChat()}
             className="inline-flex size-10 items-center justify-center rounded-sm text-subtle hover:text-fg"
             aria-label="Clear chat"
-            title="Clear chat — memory stays"
           >
             <Eraser className="size-4" />
           </button>
@@ -708,9 +501,6 @@ function AgentPane() {
         {messages.length === 0 ? (
           <div className="space-y-3 pt-4">
             <p className="font-display text-2xl tracking-tight">Ask the book a question.</p>
-            <p className="text-sm text-muted">
-              Skills judge. Plugins see. Memory survives a cleared chat. The model thinks — Grok, or a local code agent over ACP.
-            </p>
             <div className="flex flex-col gap-1">
               {prompts.map((p) => (
                 <button
@@ -742,13 +532,7 @@ function AgentPane() {
           className="h-11"
         />
         {streaming ? (
-          <Button
-            type="button"
-            size="icon"
-            variant="secondary"
-            onClick={() => abort.current?.abort()}
-            aria-label="Stop"
-          >
+          <Button type="button" size="icon" variant="secondary" onClick={() => abort.current?.abort()} aria-label="Stop">
             <Square className="size-4" />
           </Button>
         ) : (
@@ -773,11 +557,6 @@ function Bubble({ msg }: { msg: ChatMessage }) {
             <div key={t.id} className="rounded-sm border border-border px-2 py-1.5 text-[11px] text-muted">
               <span className="text-fg">{t.name}</span>
               <span className="ml-2 text-subtle">{t.status}</span>
-              {t.result ? (
-                <pre className="mt-1 max-h-20 overflow-auto font-mono text-[10px] text-subtle">
-                  {t.result.slice(0, 400)}
-                </pre>
-              ) : null}
             </div>
           ))}
         </div>
@@ -785,14 +564,6 @@ function Bubble({ msg }: { msg: ChatMessage }) {
       <div className="whitespace-pre-wrap text-sm leading-relaxed text-fg">
         {msg.content || <span className="text-subtle">Thinking…</span>}
       </div>
-      {msg.relay?.length ? (
-        <p className="font-mono text-[10px] text-subtle">
-          Relay {msg.relay.map((h) => `${h.from}→${h.to}`).join(" · ")}
-        </p>
-      ) : null}
-      {msg.acp?.sessionId ? (
-        <p className="font-mono text-[10px] text-subtle">ACP {msg.acp.sessionId}</p>
-      ) : null}
     </div>
   );
 }
