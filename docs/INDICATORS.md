@@ -25,9 +25,15 @@ Groups include: **MA**, **Channel**, **Trend**, **Momentum**, **Volatility**, **
 
 Desktop is a **subset**. When adding a desktop series, reuse the same **id** as web.
 
+## Desktop chart zoom
+
+CandlestickChart has no series overlay API. The desk zooms by **slicing** the candle vector
+(`view_len`, right-aligned to the tip). Buttons: **+** / **−** / bar-count reset next to **Older**.
+EMA/BB/MACD remain status tips until a custom paint path lands.
+
 ## Adding parity
 
 1. Implement math in `desktop/src/indicators.rs` (and extend `SeriesSet` / `status_tips`).
 2. Add the id to `INDICATOR_IDS`.
 3. Prefer the same period defaults as web (e.g. RSI 14, BB 20/2, MACD 12/26/9).
-4. Canvas line overlays wait on Batch 4 (custom GPUI chart) or upstream series API on CandlestickChart.
+4. Canvas line overlays wait on a custom GPUI paint path or upstream series API on CandlestickChart.

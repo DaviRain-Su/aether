@@ -18,7 +18,7 @@
 
 - [x] Desktop history `before` + **Older** button
 - [x] Desktop EMA / RSI (and more) status tips from SeriesSet
-- [ ] Canvas EMA overlays on CandlestickChart (blocked: no series API — tips + toggles interim)
+- [ ] Canvas EMA line overlays (still blocked: CandlestickChart has no series API)
 - [ ] Desktop native WS (optional; 2s poll is baseline)
 
 ## Batch 3 — mostly landed
@@ -33,12 +33,13 @@
 
 ## Batch 4 — in progress
 
-- [x] Memory Desk+ billing surface on `/memory` (plan cards, quota bar, link to Fleet)
-- [x] Plan catalog names Desk+ consistently (`plans.ts`)
-- [x] External wallets (injected OKX / MetaMask) on Accounts — client connect only
-- [x] Real-money execution **boundary** (`src/lib/execution`, docs/EXECUTION.md) — live hard-off
+- [x] Memory Desk+ billing surface on `/memory`
+- [x] Plan catalog names Desk+ consistently
+- [x] External wallets (injected OKX / MetaMask) on Accounts
+- [x] Real-money execution **boundary** — live hard-off
+- [x] Desktop chart **view zoom** (+ / − / reset on visible bar window)
 - [ ] Payment checkout (Stripe or similar) — still **Soon**
-- [ ] Custom GPUI canvas chart with overlays + wheel zoom (replace CandlestickChart)
+- [ ] Custom GPUI canvas with drawn EMA overlays (replace CandlestickChart later)
 
 ## Money boundary
 
