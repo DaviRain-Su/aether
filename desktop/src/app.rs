@@ -39,6 +39,8 @@ pub struct Desk {
     pull_gen: u64,
     local_only: bool,
     wallet: crate::wallet::WalletSnap,
+    has_more: bool,
+    loading_older: bool,
     _focus: FocusHandle,
 }
 
@@ -74,6 +76,8 @@ impl Desk {
             pull_gen: 0,
             local_only: true,
             wallet: crate::wallet::WalletSnap::default(),
+            has_more: true,
+            loading_older: false,
             _focus: cx.focus_handle(),
         };
         desk.arm_timer(cx);
@@ -164,14 +168,18 @@ impl Desk {
                             this.candles.drain(0..drop);
                         }
                         let series = crate::indicators::compute(&this.candles);
-                        let tip = series.rsi.last().and_then(|v| *v);
+                        let rsi = series.rsi.iter().rev().find_map(|v| *v);
+                        let e20 = series.ema20.iter().rev().find_map(|v| *v);
+                        let e50 = series.ema50.iter().rev().find_map(|v| *v);
                         this.status = format!(
-                            "{} {} × {} · {}{}",
+                            "{} {}×{} · {}{}{}{}",
                             tape::label(&this.tape),
                             this.candles.len(),
                             this.bar,
                             this.focus,
-                            tip.map(|r| format!(" · RSI {r:.1}")).unwrap_or_default()
+                            e20.map(|v| format!(" · EMA20 {v:.2}")).unwrap_or_default(),
+                            e50.map(|v| format!(" EMA50 {v:.2}")).unwrap_or_default(),
+                            rsi.map(|r| format!(" · RSI {r:.1}")).unwrap_or_default()
                         )
                         .into();
                     } else if this.candles.len() <= 4 {
@@ -200,6 +208,7 @@ impl Desk {
             return;
         }
         self.focus = symbol.into();
+        self.has_more = true;
         self.status = format!("loading {}…", self.focus).into();
         self.schedule_pull(cx);
         cx.notify();
@@ -210,6 +219,7 @@ impl Desk {
             return;
         }
         self.bar = bar.into();
+        self.has_more = true;
         self.status = format!("loading {}…", self.bar).into();
         self.schedule_pull(cx);
         cx.notify();
@@ -220,6 +230,7 @@ impl Desk {
             return;
         }
         self.tape = source.into();
+        self.has_more = true;
         self.status = format!("loading {}…", tape::label(&self.tape)).into();
         self.schedule_pull(cx);
         cx.notify();
@@ -323,7 +334,7 @@ impl Desk {
                         }
                     }
                     Err(err) => {
-                        this.status = format!("pair failed: {err}").into();
+                        this.status = format!("pair failed: {err}".into());
                         this.log.push(format!("pair  {err}"));
                     }
                 }
@@ -359,6 +370,43 @@ impl Desk {
             .ok();
         })
         .detach();
+    }
+
+    fn load_older(&mut self, cx: &mut Context<Self>) {
+        if self.loading_older || !self.has_more || self.candles.is_empty() {
+            return;
+        }
+        self.loading_older = true;
+        let focus = self.focus.clone();
+        let bar = self.bar.clone();
+        let source = self.tape.clone();
+        let before = self.candles.first().map(|c| c.t);
+        cx.spawn(async move |this, cx| {
+            let pack = cx
+                .background_executor()
+                .spawn(async move { tape::pull_before(&source, &focus, &bar, before) })
+                .await;
+            this.update(cx, |this, cx| {
+                this.loading_older = false;
+                if pack.candles.len() > 2 {
+                    this.candles = tape::merge_candles(&this.candles, &pack.candles);
+                    this.has_more = pack.candles.len() >= 40;
+                    this.status = format!(
+                        "history +{} · {} bars",
+                        pack.candles.len(),
+                        this.candles.len()
+                    )
+                    .into();
+                } else {
+                    this.has_more = false;
+                    this.status = "history start".into();
+                }
+                cx.notify();
+            })
+            .ok();
+        })
+        .detach();
+        cx.notify();
     }
 
     fn toggle_path(&mut self, cx: &mut Context<Self>) {
