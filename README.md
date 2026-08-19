@@ -102,6 +102,13 @@ cloudflare/    Durable Objects control plane
 migrations/    Postgres / PGLite
 ```
 
+## Docs
+
+- [`docs/WALLET.md`](docs/WALLET.md) — paper vs live, Privy vs OKX Connect
+- [`docs/INDICATORS.md`](docs/INDICATORS.md) — Web ↔ desktop indicator ids
+- [`docs/PRIVY_CHECKLIST.md`](docs/PRIVY_CHECKLIST.md) — deploy-time mint verification
+- [`ROADMAP.md`](ROADMAP.md) — batches and goals
+
 ## Not this product
 
 Not a broker. Not advice. Not custody. Paper fills are simulated. Live keys live on Privy. Skills are judgment systems, not promises.
