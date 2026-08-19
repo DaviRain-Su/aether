@@ -42,6 +42,8 @@ pub struct Desk {
     has_more: bool,
     loading_older: bool,
     active_indicators: Vec<String>,
+    /// Visible window into candles (zoom). Right-aligned to tip.
+    view_len: usize,
     _focus: FocusHandle,
 }
 
@@ -80,6 +82,7 @@ impl Desk {
             has_more: true,
             loading_older: false,
             active_indicators: crate::indicators::default_active(),
+            view_len: 120,
             _focus: cx.focus_handle(),
         };
         desk.arm_timer(cx);
@@ -425,6 +428,34 @@ impl Desk {
             .ok();
         })
         .detach();
+        cx.notify();
+    }
+
+    /// Visible candles for the chart (right-aligned tip).
+    pub fn visible_candles(&self) -> Vec<Candle> {
+        let n = self.candles.len();
+        if n == 0 {
+            return vec![];
+        }
+        let len = self.view_len.clamp(20, 400).min(n);
+        self.candles[n - len..].to_vec()
+    }
+
+    fn zoom_in(&mut self, cx: &mut Context<Self>) {
+        let n = self.candles.len().max(1);
+        self.view_len = (self.view_len * 2 / 3).clamp(20, n.max(20));
+        cx.notify();
+    }
+
+    fn zoom_out(&mut self, cx: &mut Context<Self>) {
+        let n = self.candles.len().max(1);
+        self.view_len = (self.view_len * 3 / 2).clamp(20, n.max(20).min(400));
+        cx.notify();
+    }
+
+    fn zoom_reset(&mut self, cx: &mut Context<Self>) {
+        let n = self.candles.len().max(1);
+        self.view_len = n.min(120).max(20);
         cx.notify();
     }
 
