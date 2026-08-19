@@ -16,6 +16,7 @@ import type {
 } from "./types";
 import { uid } from "./utils";
 import { DEFAULT_INDICATORS } from "./indicators";
+import { parseTape, type LiveTape } from "./venues";
 
 type HarnessState = {
   markets: Market[];
@@ -35,6 +36,7 @@ type HarnessState = {
   streaming: boolean;
   hydrated: boolean;
   chartBar: ChartBar;
+  chartIndicators: string[];
   tapeSource: LiveTape;
   privacy: PrivacyPrefs;
   setMarkets: (m: Market[]) => void;
@@ -45,6 +47,7 @@ type HarnessState = {
   toggleFollow: (id: string) => void;
   setModel: (id: string) => void;
   setChartBar: (bar: ChartBar) => void;
+  toggleIndicator: (id: string) => void;
   setTapeSource: (source: LiveTape) => void;
   setPrivacy: (patch: Partial<PrivacyPrefs>) => void;
   addAcpAgent: (a: Omit<AcpAgentConfig, "id" | "createdAt">) => void;
@@ -87,6 +90,7 @@ export const useHarness = create<HarnessState>()(
       followed: [],
       modelId: "desk-rules",
       chartBar: "15m",
+      chartIndicators: DEFAULT_INDICATORS,
       tapeSource: "okx",
       privacy: { hideBalances: false, hidePnl: false, hideIdentity: false },
       acpAgents: [
@@ -121,6 +125,12 @@ export const useHarness = create<HarnessState>()(
         }),
       setModel: (modelId) => set({ modelId }),
       setChartBar: (chartBar) => set({ chartBar }),
+      toggleIndicator: (id) =>
+        set((s) => ({
+          chartIndicators: s.chartIndicators.includes(id)
+            ? s.chartIndicators.filter((x) => x !== id)
+            : [...s.chartIndicators, id],
+        })),
       setTapeSource: (tapeSource) => set({ tapeSource: parseTape(tapeSource) }),
       setPrivacy: (patch) => set((s) => ({ privacy: { ...s.privacy, ...patch } })),
       addAcpAgent: (a) =>
@@ -198,11 +208,15 @@ export const useHarness = create<HarnessState>()(
         acpAgents: s.acpAgents,
         messages: s.messages.slice(-40),
         chartBar: s.chartBar,
+        chartIndicators: s.chartIndicators,
         tapeSource: s.tapeSource,
         privacy: s.privacy,
       }),
       onRehydrateStorage: () => (state) => {
         if (state) {
+          if (!Array.isArray(state.chartIndicators) || !state.chartIndicators.length) {
+            state.chartIndicators = ["ema20", "ema50", "rsi"];
+          }
           state.hydrated = true;
           state.chartBar ??= "15m";
           state.tapeSource = parseTape(state.tapeSource);
