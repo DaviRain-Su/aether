@@ -3,10 +3,18 @@ import { AppShell, PageIntro } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { GALLERY, SKILLS, venueLabel } from "@/lib/catalog";
+import { pageHead } from "@/lib/seo";
 import { useHarness } from "@/lib/store";
 import { formatPct, formatUsd } from "@/lib/utils";
 
-export const Route = createFileRoute("/agents")({ component: AgentsPage });
+export const Route = createFileRoute("/agents")({
+  component: AgentsPage,
+  head: () =>
+    pageHead(
+      "Agents",
+      "Follow packaged judgment — Livermore, Druckenmiller, Turtles, Hayes — and let a local code agent sit in the seat.",
+    ),
+});
 
 function AgentsPage() {
   const followed = useHarness((s) => s.followed);

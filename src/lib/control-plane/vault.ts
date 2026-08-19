@@ -351,3 +351,22 @@ export async function getRunningSlot(ownerId: string, slotId: string): Promise<S
   const vault = await loadVault(ownerId);
   return vault.slots.find((s) => s.id === slotId && s.status === "running") ?? null;
 }
+
+export async function planOf(ownerId: string): Promise<PlanId> {
+  if (ownerId.startsWith("guest:")) return "observer";
+  const sql = await getSql();
+  await ensureVault(ownerId);
+  const rows = await sql<{ plan_id: string }>`
+    select plan_id from control_vaults where owner_id = ${ownerId}
+  `;
+  return (rows[0]?.plan_id as PlanId) ?? "observer";
+}
+
+export async function deviceBelongs(ownerId: string, deviceId: string): Promise<boolean> {
+  const sql = await getSql();
+  const rows = await sql<{ id: string }>`
+    select id from control_devices
+    where id = ${deviceId} and owner_id = ${ownerId} and status != 'revoked'
+  `;
+  return rows.length > 0;
+}

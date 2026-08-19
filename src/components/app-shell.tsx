@@ -5,6 +5,7 @@ import { SignedIn, SignedOut, UserButton } from "@/lib/auth/gates";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
 import { useHarness } from "@/lib/store";
 import { cn, formatUsd, maskMoney } from "@/lib/utils";
+import { useLiveWallet } from "@/lib/wallet/use-live-wallet";
 import { Button } from "./ui/button";
 
 const NAV = [
@@ -36,6 +37,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   });
   const day = equity - 100_000;
   const [open, setOpen] = useState(false);
+  const live = useLiveWallet();
+  const liveUsd = live.snap?.liveUsd ?? 0;
+  const liveMinted = live.snap?.minted ?? false;
 
   return (
     <div className="flex min-h-dvh flex-col bg-bg text-fg">
@@ -72,23 +76,35 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="ml-auto flex items-center gap-3">
-          <div className="hidden text-right sm:block">
-            <div className="font-mono text-sm tabular-nums">
-              {mounted ? maskMoney(privacy.hideBalances, equity) : formatUsd(100000)}
-            </div>
-            {privacy.hidePnl ? null : (
-            <div className={cn("text-[11px] tabular-nums", day >= 0 ? "text-up" : "text-down")}>
-              {mounted ? (
-                <>
-                  {day >= 0 ? "+" : ""}
-                  {formatUsd(day)}
-                </>
-              ) : (
-                "+$0.00"
+          <Link to="/accounts" className="hidden items-center gap-4 sm:flex">
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wide text-subtle">Paper</p>
+              <div className="font-mono text-sm tabular-nums">
+                {mounted ? maskMoney(privacy.hideBalances, equity) : "—"}
+              </div>
+              {privacy.hidePnl ? null : (
+                <div className={cn("text-[11px] tabular-nums", day >= 0 ? "text-up" : "text-down")}>
+                  {mounted ? (
+                    <>
+                      {day >= 0 ? "+" : ""}
+                      {formatUsd(day)}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </div>
               )}
             </div>
-            )}
-          </div>
+            <div className="text-right">
+              <p className="text-[10px] uppercase tracking-wide text-subtle">Live</p>
+              <div className="font-mono text-sm tabular-nums">
+                {mounted && liveMinted ? maskMoney(privacy.hideBalances, liveUsd) : "—"}
+              </div>
+              <div className="text-[11px] text-subtle">
+                {liveMinted ? "Privy" : "not minted"}
+              </div>
+            </div>
+          </Link>
           {isPending ? (
             <div className="size-8 animate-pulse rounded-full bg-raised" />
           ) : user ? (

@@ -5,11 +5,19 @@ import { AppShell, PageIntro } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KIND_LABEL, PLANS, kindAllowed, planById, type AgentKind } from "@/lib/control-plane/plans";
+import { KIND_LABEL, PLANS, kindAllowed, memoryQuota, planById, type AgentKind } from "@/lib/control-plane/plans";
 import { useVault } from "@/lib/control-plane/use-vault";
+import { pageHead } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
-export const Route = createFileRoute("/devices")({ component: DevicesPage });
+export const Route = createFileRoute("/devices")({
+  component: DevicesPage,
+  head: () =>
+    pageHead(
+      "Fleet",
+      "Pair a machine with an AETH device code. Plans gate seats, agent kinds, and cloud memory.",
+    ),
+});
 
 function DevicesPage() {
   const ctl = useVault();
@@ -75,7 +83,8 @@ function DevicesPage() {
               <p className="mt-2 text-sm text-muted">{p.blurb}</p>
               <p className="mt-3 font-mono text-xs text-subtle">
                 {p.devices} device{p.devices === 1 ? "" : "s"} · {p.seatsPerDevice} seat
-                {p.seatsPerDevice === 1 ? "" : "s"}/device · {p.agents} vault
+                {p.seatsPerDevice === 1 ? "" : "s"}/device · {p.agents} vault ·{" "}
+                {memoryQuota(p.id).cloud ? `${memoryQuota(p.id).entities} cloud lessons` : "local memory"}
               </p>
             </button>
           );

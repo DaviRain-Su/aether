@@ -3,9 +3,17 @@ import { AppShell, PageIntro } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PLUGINS } from "@/lib/catalog";
+import { pageHead } from "@/lib/seo";
 import { useHarness } from "@/lib/store";
 
-export const Route = createFileRoute("/plugins")({ component: PluginsPage });
+export const Route = createFileRoute("/plugins")({
+  component: PluginsPage,
+  head: () =>
+    pageHead(
+      "Plugins",
+      "What the agent can see: tapes, on-chain, news, mindshare, prediction books.",
+    ),
+});
 
 function PluginsPage() {
   const on = useHarness((s) => s.plugins);

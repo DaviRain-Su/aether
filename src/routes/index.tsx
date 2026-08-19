@@ -4,10 +4,18 @@ import { useEffect, useState } from "react";
 import { Mark } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { GALLERY, SKILLS, buildStaticMarkets } from "@/lib/catalog";
+import { pageHead } from "@/lib/seo";
 import type { Market } from "@/lib/types";
 import { formatPct, formatUsd } from "@/lib/utils";
 
-export const Route = createFileRoute("/")({ component: Landing });
+export const Route = createFileRoute("/")({
+  component: Landing,
+  head: () =>
+    pageHead(
+      "Aether",
+      "Aether is a local-first AI finance agent: paper trading, live Privy wallets from Google, OKX, Backpack, Phoenix and Hyperliquid tapes, ACP for your own code agent, and a native GPUI desk.",
+    ),
+});
 
 const PILLARS = [
   {
@@ -23,12 +31,12 @@ const PILLARS = [
   {
     k: "03",
     title: "Plugins",
-    body: "What the agent can see: OKX, Backpack, and Phoenix tapes, on-chain, news, mindshare, prediction books. A model without plugins is a chatbot.",
+    body: "What the agent can see: OKX, Backpack, Phoenix, and Hyperliquid tapes, on-chain, news, mindshare, prediction books. A model without plugins is a chatbot.",
   },
   {
     k: "04",
     title: "Execution",
-    body: "Paper venues for spot, perps, equities, and prediction markets. Tape from OKX, Backpack, or Phoenix on Solana. Self-custody later. The brain, not the vault.",
+    body: "Paper venues for spot, perps, equities, and prediction markets. Live money is a Privy wallet minted from Google — never the paper book. The brain, not the vault.",
   },
 ];
 
@@ -247,7 +255,7 @@ function Landing() {
             We are the brain, not the vault
           </p>
           <h2 className="font-display mt-3 max-w-3xl text-3xl md:text-5xl">
-            Scoped paper trading today. Self-custody when you take it local.
+            Scoped paper trading today. Live keys from Google via Privy when you sign in.
           </h2>
           <p className="mt-5 max-w-2xl text-sm text-muted">
             Nothing here is financial advice. Skills are judgment systems, not promises.
@@ -259,7 +267,7 @@ function Landing() {
       <footer className="border-t border-border px-5 py-8 text-xs text-subtle">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 md:flex-row md:justify-between">
           <span>Aether · local financial harness</span>
-          <span>Not a broker. Not advice. Paper book by default.</span>
+          <span>Not a broker. Not advice. Paper book is a simulator. Live wallet is Privy.</span>
         </div>
       </footer>
     </div>

@@ -1,11 +1,13 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE, jsonLd } from "@/lib/seo";
 import appCss from "../styles.css?url";
 
-const APP_NAME = "Aether";
-const host = import.meta.env.VITE_PUBLIC_HOSTNAME;
-const ogImage = host ? `https://${host}/og.jpg` : undefined;
+const host = import.meta.env.VITE_PUBLIC_HOSTNAME as string | undefined;
+const origin = host ? `https://${host}` : undefined;
+const ogImage = origin ? `${origin}/og.jpg` : undefined;
+const ld = JSON.stringify(jsonLd(host));
 
 export const Route = createRootRoute({
   head: () => ({
@@ -13,18 +15,32 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: APP_NAME },
-      { name: "description", content: "Aether is a local-first AI finance agent. Models, skills, plugins, execution — plus ACP for your own code agent." },
+      { name: "description", content: APP_DESCRIPTION },
       { name: "apple-mobile-web-app-title", content: APP_NAME },
       { name: "theme-color", content: "#09090b" },
+      { name: "robots", content: "index, follow" },
+      { name: "author", content: "Aether" },
+      {
+        name: "keywords",
+        content:
+          "AI trading agent, paper trading, Privy wallet, Hyperliquid, OKX, Backpack, Phoenix, Solana, ACP, GPUI",
+      },
       { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: APP_NAME },
+      { name: "twitter:description", content: APP_TAGLINE },
       { property: "og:type", content: "website" },
+      { property: "og:site_name", content: APP_NAME },
+      { property: "og:locale", content: "en_US" },
       { property: "og:title", content: APP_NAME },
-      { property: "og:description", content: "AI finance agent. The brain, not the vault." },
+      { property: "og:description", content: APP_TAGLINE },
+      ...(origin ? [{ property: "og:url", content: origin }] : []),
       ...(ogImage
         ? [
             { property: "og:image", content: ogImage },
             { property: "og:image:width", content: "1200" },
             { property: "og:image:height", content: "630" },
+            { property: "og:image:alt", content: "Aether — finance agent" },
+            { name: "twitter:image", content: ogImage },
           ]
         : []),
     ],
@@ -33,6 +49,7 @@ export const Route = createRootRoute({
       { rel: "stylesheet", href: appCss },
       { rel: "manifest", href: "/__grok/manifest.webmanifest" },
       { rel: "apple-touch-icon", href: "/__grok/icon-180.png" },
+      ...(origin ? [{ rel: "canonical", href: origin }] : []),
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       {
         rel: "preconnect",
@@ -51,6 +68,7 @@ export const Route = createRootRoute({
         <HeadContent />
       </head>
       <body>
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: ld }} />
         <PreviewHostBridge />
         <AuthProvider>
           <Outlet />

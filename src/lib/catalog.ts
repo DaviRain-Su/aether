@@ -434,8 +434,8 @@ export const PLUGINS: PluginDef[] = [
     id: "market-data",
     name: "Market Data",
     kind: "market",
-    blurb: "Live tape from OKX, Backpack, and Phoenix on Solana. Equities and prediction books stay local.",
-    source: "OKX · Backpack · Phoenix",
+    blurb: "Live tape from OKX, Backpack, Phoenix on Solana, and Hyperliquid. Equities and prediction books stay local unless Phoenix lists them.",
+    source: "OKX · Backpack · Phoenix · Hyperliquid",
   },
   {
     id: "onchain",

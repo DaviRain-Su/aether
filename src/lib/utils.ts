@@ -41,8 +41,9 @@ export function maskMoney(hidden: boolean, n: number, digits = 2): string {
   return hidden ? "••••" : formatUsd(n, digits);
 }
 
-export function shortId(id: string): string {
-  return id.length > 10 ? `${id.slice(0, 6)}…${id.slice(-4)}` : id;
+export function shortAddr(addr: string): string {
+  if (addr.length <= 12) return addr;
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
 }
 
 export function uid(prefix = "id"): string {

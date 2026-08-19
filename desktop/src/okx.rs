@@ -57,6 +57,7 @@ struct RawTicker {
 }
 
 pub const UNIVERSE: &[&str] = &["BTC", "ETH", "SOL", "HYPE", "DOGE", "XRP"];
+#[allow(dead_code)]
 pub const BARS: &[&str] = &["1s", "1m", "5m", "15m", "1H", "4H", "1D"];
 
 pub fn inst_id(symbol: &str) -> String {

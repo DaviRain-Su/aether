@@ -1,12 +1,13 @@
 import type { ChartBar, TapeSource } from "./types";
 
-export const TAPE_SOURCES = ["okx", "backpack", "phoenix"] as const;
+export const TAPE_SOURCES = ["okx", "backpack", "phoenix", "hyperliquid"] as const;
 export type LiveTape = (typeof TAPE_SOURCES)[number];
 
 export const TAPE_META: Record<LiveTape, { label: string; hint: string }> = {
   okx: { label: "OKX", hint: "USDT spot & swaps" },
   backpack: { label: "Backpack", hint: "USDC spot & perps" },
   phoenix: { label: "Phoenix", hint: "Solana perps" },
+  hyperliquid: { label: "Hyperliquid", hint: "HL perps · HYPE native" },
 };
 
 export function isLiveTape(v: string | null | undefined): v is LiveTape {
@@ -21,6 +22,7 @@ export function tapeLabel(source: TapeSource | undefined): string {
   if (source === "okx") return "OKX";
   if (source === "backpack") return "Backpack";
   if (source === "phoenix") return "Phoenix";
+  if (source === "hyperliquid") return "Hyperliquid";
   if (source === "coingecko") return "CoinGecko";
   return "Local tape";
 }
@@ -44,6 +46,10 @@ export function venueBar(source: LiveTape, bar: ChartBar): string {
     if (bar === "3m") return "5m";
     return lower[bar];
   }
+  if (source === "hyperliquid") {
+    if (bar === "1s") return "1m";
+    return lower[bar];
+  }
   return lower[bar];
 }
 
@@ -53,6 +59,7 @@ export function mappedBar(source: LiveTape, bar: ChartBar): ChartBar {
     if (bar === "1s") return "1m";
     if (bar === "3m") return "5m";
   }
+  if (source === "hyperliquid" && bar === "1s") return "1m";
   return bar;
 }
 

@@ -22,7 +22,7 @@ export const PLANS: Plan[] = [
   {
     id: "observer",
     name: "Observer",
-    blurb: "One machine. One seat. Enough to learn the harness.",
+    blurb: "One machine. Local memory. Enough to learn the harness.",
     devices: 1,
     agents: 1,
     seatsPerDevice: 1,
@@ -32,7 +32,7 @@ export const PLANS: Plan[] = [
   {
     id: "desk",
     name: "Desk",
-    blurb: "A few machines. Grok plus a local code agent on each box.",
+    blurb: "A few machines. Grok plus a local code agent. Cloud memory syncs them.",
     devices: 3,
     agents: 4,
     seatsPerDevice: 2,
@@ -42,7 +42,7 @@ export const PLANS: Plan[] = [
   {
     id: "floor",
     name: "Floor",
-    blurb: "The full book. Every transport, every machine you own.",
+    blurb: "The full book. Every transport, every machine, memory that never drops a lesson.",
     devices: 10,
     agents: 16,
     seatsPerDevice: 4,
@@ -66,6 +66,38 @@ export function inferKind(modelId: string, transport?: string): AgentKind {
   if (transport === "websocket" || modelId.includes("websocket")) return "acp-websocket";
   if (transport === "stdio" || modelId.startsWith("acp:")) return "acp-stdio";
   return "desk-rules";
+}
+
+export type MemoryQuota = {
+  cloud: boolean;
+  entities: number;
+  journalDays: number;
+  blurb: string;
+};
+
+export function memoryQuota(id: PlanId): MemoryQuota {
+  if (id === "floor") {
+    return {
+      cloud: true,
+      entities: 4000,
+      journalDays: 365,
+      blurb: "Full book memory across every paired desk.",
+    };
+  }
+  if (id === "desk") {
+    return {
+      cloud: true,
+      entities: 400,
+      journalDays: 90,
+      blurb: "Cloud memory syncs the web desk and the native box.",
+    };
+  }
+  return {
+    cloud: false,
+    entities: 40,
+    journalDays: 7,
+    blurb: "Local memory on this box. Cloud sync is Desk+.",
+  };
 }
 
 export const KIND_LABEL: Record<AgentKind, string> = {

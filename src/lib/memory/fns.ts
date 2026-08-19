@@ -1,5 +1,7 @@
 import { createMiddleware, createServerFn } from "@tanstack/react-start";
 import { getSessionUser } from "@/lib/auth/verify.server";
+import { memoryQuota } from "@/lib/control-plane/plans";
+import { planOf } from "@/lib/control-plane/vault";
 import { ownerOf } from "./owner";
 import { appendJournal, archiveEntity, loadMemory, upsertEntity } from "./store";
 
@@ -19,7 +21,11 @@ const optionalAuth = createMiddleware({ type: "function" })
 export const fetchMemoryFn = createServerFn({ method: "GET" })
   .middleware([optionalAuth])
   .validator((input: { guestId?: string }) => input)
-  .handler(async ({ data, context }) => loadMemory(ownerOf(context.userId, data.guestId)));
+  .handler(async ({ data, context }) => {
+    const ownerId = ownerOf(context.userId, data.guestId);
+    const planId = await planOf(ownerId);
+    return { ...(await loadMemory(ownerId)), planId, quota: memoryQuota(planId) };
+  });
 
 export const rememberFn = createServerFn({ method: "POST" })
   .middleware([optionalAuth])

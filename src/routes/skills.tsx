@@ -3,9 +3,17 @@ import { AppShell, PageIntro } from "@/components/app-shell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { SKILLS } from "@/lib/catalog";
+import { pageHead } from "@/lib/seo";
 import { useHarness } from "@/lib/store";
 
-export const Route = createFileRoute("/skills")({ component: SkillsPage });
+export const Route = createFileRoute("/skills")({
+  component: SkillsPage,
+  head: () =>
+    pageHead(
+      "Skills",
+      "Investor judgment as portable SKILL.md systems. Load one. The agent has to think that way.",
+    ),
+});
 
 function SkillsPage() {
   const loaded = useHarness((s) => s.skills);

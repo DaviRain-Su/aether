@@ -11,6 +11,7 @@ import {
   fetchBpFunding,
   fetchBpTickers,
 } from "./backpack";
+import { fetchHlCandles, fetchHlDepth, fetchHlFunding, fetchHlMarks, hlCoin } from "./hyperliquid";
 import { fetchPhxCandles, fetchPhxDepth, fetchPhxFunding, fetchPhxMarks } from "./phoenix";
 import {
   applyOkxTicker,
@@ -24,7 +25,7 @@ import {
 
 type Cache<T> = { at: number; value: T };
 
-const LIVE: ReadonlySet<string> = new Set(["okx", "backpack", "phoenix"]);
+const LIVE: ReadonlySet<string> = new Set(["okx", "backpack", "phoenix", "hyperliquid"]);
 
 const g = globalThis as typeof globalThis & {
   __aetherTape?: Map<string, Cache<Market[]>>;
@@ -87,6 +88,23 @@ export async function getMarkets(source: TapeSource = "okx"): Promise<Market[]> 
         m.price = hitMark.price;
         m.change24h = hitMark.change24h;
         m.source = "phoenix";
+        if (m.spark.length) m.spark = [...m.spark.slice(1), hitMark.price];
+      }
+    } catch {
+      /* CoinGecko below */
+    }
+  } else if (tape === "hyperliquid") {
+    try {
+      const rows = await fetchHlMarks();
+      const by = new Map(rows.map((r) => [r.coin, r]));
+      for (const m of base) {
+        if (m.venue !== "spot" && m.venue !== "perp") continue;
+        const hitMark = by.get(hlCoin(m.symbol));
+        if (!hitMark) continue;
+        m.price = hitMark.price;
+        m.change24h = hitMark.change24h;
+        m.volume24h = hitMark.volume24h;
+        m.source = "hyperliquid";
         if (m.spark.length) m.spark = [...m.spark.slice(1), hitMark.price];
       }
     } catch {
@@ -215,6 +233,18 @@ export async function getCandles(
       g.__aetherCandles.set(key, { at: Date.now(), value: packed });
       return packed;
     }
+  } else if (tape === "hyperliquid") {
+    const candles = await fetchHlCandles(symbol, bar);
+    if (candles.length > 4) {
+      const packed: CandlePack = {
+        candles,
+        source: "hyperliquid",
+        instId: hlCoin(symbol),
+        mappedBar: mappedBar("hyperliquid", bar),
+      };
+      g.__aetherCandles.set(key, { at: Date.now(), value: packed });
+      return packed;
+    }
   } else {
     const instId = resolveOkxInst(symbol);
     if (instId) {
@@ -294,6 +324,7 @@ export async function getDepth(symbol: string, source: TapeSource = "okx"): Prom
   let book: DepthBook | null = null;
   if (tape === "backpack") book = await fetchBpDepth(symbol);
   else if (tape === "phoenix") book = await fetchPhxDepth(symbol);
+  else if (tape === "hyperliquid") book = await fetchHlDepth(symbol);
   else {
     const instId = resolveOkxInst(symbol);
     if (instId) book = await fetchOkxDepth(instId, 16);
@@ -311,6 +342,7 @@ export async function getFunding(symbol: string, source: TapeSource = "okx"): Pr
   let snap: FundingSnap | null = null;
   if (tape === "backpack") snap = await fetchBpFunding(symbol);
   else if (tape === "phoenix") snap = await fetchPhxFunding(symbol);
+  else if (tape === "hyperliquid") snap = await fetchHlFunding(symbol);
   else {
     const inst = resolveOkxInst(symbol.endsWith("-PERP") ? symbol : `${symbol}-PERP`);
     if (inst) snap = await fetchOkxFunding(inst);

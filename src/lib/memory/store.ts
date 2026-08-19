@@ -1,4 +1,6 @@
 import { getSql } from "@/lib/db";
+import { planOf } from "@/lib/control-plane/vault";
+import { memoryQuota } from "@/lib/control-plane/plans";
 import { uid } from "@/lib/utils";
 import type { MemoryCategory, MemoryEntity, MemoryJournalEntry, MemorySnapshot } from "./types";
 
@@ -101,6 +103,16 @@ export async function upsertEntity(
     select id from memory_entities
     where owner_id = ${ownerId} and category = ${input.category} and name = ${name}
   `;
+  if (!existing[0]) {
+    const live = await sql<{ n: number }>`
+      select count(*)::int as n from memory_entities
+      where owner_id = ${ownerId} and status = 'live'
+    `;
+    const cap = memoryQuota(await planOf(ownerId)).entities;
+    if ((live[0]?.n ?? 0) >= cap) {
+      throw new Error(`Memory full (${cap} live entities on this plan). Archive one, or move to Desk.`);
+    }
+  }
   const id = existing[0]?.id ?? uid("mem");
   const meta = JSON.stringify(input.meta ?? {});
   const status = input.status ?? "live";

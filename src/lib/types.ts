@@ -10,7 +10,7 @@ export type ModelKind = "grok" | "acp";
 
 export type AcpTransport = "loopback" | "stdio" | "websocket";
 
-export type TapeSource = "okx" | "backpack" | "phoenix" | "coingecko" | "seed";
+export type TapeSource = "okx" | "backpack" | "phoenix" | "hyperliquid" | "coingecko" | "seed";
 
 export type ChartBar = "1s" | "1m" | "3m" | "5m" | "15m" | "30m" | "1H" | "4H" | "1D";
 

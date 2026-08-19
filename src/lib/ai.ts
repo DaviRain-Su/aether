@@ -65,13 +65,13 @@ export const FINANCE_TOOLS = [
     function: {
       name: "get_candles",
       description:
-        "OHLC candles for a symbol. Crypto from the selected tape (OKX, Backpack, Phoenix). bar: 1s, 1m, 3m, 5m, 15m, 30m, 1H, 4H, 1D. Optional source: okx | backpack | phoenix.",
+        "OHLC candles for a symbol. Crypto from the selected tape (OKX, Backpack, Phoenix, Hyperliquid). bar: 1s, 1m, 3m, 5m, 15m, 30m, 1H, 4H, 1D. Optional source: okx | backpack | phoenix | hyperliquid.",
       parameters: {
         type: "object",
         properties: {
           symbol: { type: "string" },
           bar: { type: "string" },
-          source: { type: "string", description: "okx | backpack | phoenix" },
+          source: { type: "string", description: "okx | backpack | phoenix | hyperliquid" },
         },
         required: ["symbol"],
       },

@@ -18,10 +18,13 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as MemoryRouteImport } from './routes/memory'
 import { Route as ModelsRouteImport } from './routes/models'
 import { Route as PluginsRouteImport } from './routes/plugins'
+import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as TradeRouteImport } from './routes/trade'
 import { Route as ApiMarketsRouteImport } from './routes/api/markets'
 import { Route as ApiMemoryRouteImport } from './routes/api/memory'
+import { Route as ApiWalletRouteImport } from './routes/api/wallet'
 import { Route as ApiAgentTurnRouteImport } from './routes/api/agent/turn'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiControlClaimRouteImport } from './routes/api/control/claim'
@@ -72,6 +75,16 @@ const PluginsRoute = PluginsRouteImport.update({
   path: '/plugins',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RobotsDottxtRoute = RobotsDottxtRouteImport.update({
+  id: '/robots.txt',
+  path: '/robots.txt',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SkillsRoute = SkillsRouteImport.update({
   id: '/skills',
   path: '/skills',
@@ -90,6 +103,11 @@ const ApiMarketsRoute = ApiMarketsRouteImport.update({
 const ApiMemoryRoute = ApiMemoryRouteImport.update({
   id: '/api/memory',
   path: '/api/memory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiWalletRoute = ApiWalletRouteImport.update({
+  id: '/api/wallet',
+  path: '/api/wallet',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiAgentTurnRoute = ApiAgentTurnRouteImport.update({
@@ -123,10 +141,13 @@ export interface FileRoutesByFullPath {
   '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
   '/plugins': typeof PluginsRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/trade': typeof TradeRoute
   '/api/markets': typeof ApiMarketsRoute
   '/api/memory': typeof ApiMemoryRoute
+  '/api/wallet': typeof ApiWalletRoute
   '/api/agent/turn': typeof ApiAgentTurnRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/control/claim': typeof ApiControlClaimRoute
@@ -142,10 +163,13 @@ export interface FileRoutesByTo {
   '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
   '/plugins': typeof PluginsRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/trade': typeof TradeRoute
   '/api/markets': typeof ApiMarketsRoute
   '/api/memory': typeof ApiMemoryRoute
+  '/api/wallet': typeof ApiWalletRoute
   '/api/agent/turn': typeof ApiAgentTurnRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/control/claim': typeof ApiControlClaimRoute
@@ -162,10 +186,13 @@ export interface FileRoutesById {
   '/memory': typeof MemoryRoute
   '/models': typeof ModelsRoute
   '/plugins': typeof PluginsRoute
+  '/robots.txt': typeof RobotsDottxtRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/skills': typeof SkillsRoute
   '/trade': typeof TradeRoute
   '/api/markets': typeof ApiMarketsRoute
   '/api/memory': typeof ApiMemoryRoute
+  '/api/wallet': typeof ApiWalletRoute
   '/api/agent/turn': typeof ApiAgentTurnRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/control/claim': typeof ApiControlClaimRoute
@@ -183,10 +210,13 @@ export interface FileRouteTypes {
     | '/memory'
     | '/models'
     | '/plugins'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/skills'
     | '/trade'
     | '/api/markets'
     | '/api/memory'
+    | '/api/wallet'
     | '/api/agent/turn'
     | '/api/auth/$'
     | '/api/control/claim'
@@ -202,10 +232,13 @@ export interface FileRouteTypes {
     | '/memory'
     | '/models'
     | '/plugins'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/skills'
     | '/trade'
     | '/api/markets'
     | '/api/memory'
+    | '/api/wallet'
     | '/api/agent/turn'
     | '/api/auth/$'
     | '/api/control/claim'
@@ -221,10 +254,13 @@ export interface FileRouteTypes {
     | '/memory'
     | '/models'
     | '/plugins'
+    | '/robots.txt'
+    | '/sitemap.xml'
     | '/skills'
     | '/trade'
     | '/api/markets'
     | '/api/memory'
+    | '/api/wallet'
     | '/api/agent/turn'
     | '/api/auth/$'
     | '/api/control/claim'
@@ -241,10 +277,13 @@ export interface RootRouteChildren {
   MemoryRoute: typeof MemoryRoute
   ModelsRoute: typeof ModelsRoute
   PluginsRoute: typeof PluginsRoute
+  RobotsDottxtRoute: typeof RobotsDottxtRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SkillsRoute: typeof SkillsRoute
   TradeRoute: typeof TradeRoute
   ApiMarketsRoute: typeof ApiMarketsRoute
   ApiMemoryRoute: typeof ApiMemoryRoute
+  ApiWalletRoute: typeof ApiWalletRoute
   ApiAgentTurnRoute: typeof ApiAgentTurnRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiControlClaimRoute: typeof ApiControlClaimRoute
@@ -316,6 +355,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PluginsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/robots.txt': {
+      id: '/robots.txt'
+      path: '/robots.txt'
+      fullPath: '/robots.txt'
+      preLoaderRoute: typeof RobotsDottxtRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/skills': {
       id: '/skills'
       path: '/skills'
@@ -342,6 +395,13 @@ declare module '@tanstack/react-router' {
       path: '/api/memory'
       fullPath: '/api/memory'
       preLoaderRoute: typeof ApiMemoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/wallet': {
+      id: '/api/wallet'
+      path: '/api/wallet'
+      fullPath: '/api/wallet'
+      preLoaderRoute: typeof ApiWalletRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/agent/turn': {
@@ -385,10 +445,13 @@ const rootRouteChildren: RootRouteChildren = {
   MemoryRoute: MemoryRoute,
   ModelsRoute: ModelsRoute,
   PluginsRoute: PluginsRoute,
+  RobotsDottxtRoute: RobotsDottxtRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   SkillsRoute: SkillsRoute,
   TradeRoute: TradeRoute,
   ApiMarketsRoute: ApiMarketsRoute,
   ApiMemoryRoute: ApiMemoryRoute,
+  ApiWalletRoute: ApiWalletRoute,
   ApiAgentTurnRoute: ApiAgentTurnRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiControlClaimRoute: ApiControlClaimRoute,

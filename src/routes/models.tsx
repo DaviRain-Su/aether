@@ -6,10 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KIND_LABEL, kindAllowed, planById, type AgentKind } from "@/lib/control-plane/plans";
 import { useVault } from "@/lib/control-plane/use-vault";
+import { pageHead } from "@/lib/seo";
 import { modelOptions, useHarness } from "@/lib/store";
 import type { AcpTransport } from "@/lib/types";
 
-export const Route = createFileRoute("/models")({ component: ModelsPage });
+export const Route = createFileRoute("/models")({
+  component: ModelsPage,
+  head: () =>
+    pageHead(
+      "Models",
+      "Grok is built in. Any local code agent that speaks ACP can sit in the same seat.",
+    ),
+});
 
 function transportKind(t: AcpTransport): AgentKind {
   if (t === "websocket") return "acp-websocket";

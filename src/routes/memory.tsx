@@ -6,11 +6,20 @@ import { Button } from "@/components/ui/button";
 import { readGuestId } from "@/lib/control-plane/use-vault";
 import { archiveMemoryFn, fetchMemoryFn } from "@/lib/memory/fns";
 import type { MemorySnapshot } from "@/lib/memory/types";
+import type { MemoryQuota, PlanId } from "@/lib/control-plane/plans";
+import { pageHead } from "@/lib/seo";
 
-export const Route = createFileRoute("/memory")({ component: MemoryPage });
+export const Route = createFileRoute("/memory")({
+  component: MemoryPage,
+  head: () =>
+    pageHead(
+      "Memory",
+      "Load-bearing memory. Observer is local. Desk and Floor sync the book across web and desktop.",
+    ),
+});
 
 function MemoryPage() {
-  const [snap, setSnap] = useState<MemorySnapshot | null>(null);
+  const [snap, setSnap] = useState<(MemorySnapshot & { planId?: PlanId; quota?: MemoryQuota }) | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   async function refresh() {
@@ -36,7 +45,7 @@ function MemoryPage() {
       <PageIntro
         kicker="Memory"
         title="What the desk refuses to forget"
-        body="Lessons survive a cleared chat. If a trade already lost, the next session has to cite that — not re-derive it from a blank window."
+        body="Lessons survive a cleared chat. Observer keeps them on this box. Desk+ syncs them to every paired machine — that's the paid layer."
         action={
           <Button asChild size="sm" variant="secondary">
             <Link to="/trade">Back to the desk</Link>
@@ -51,11 +60,20 @@ function MemoryPage() {
           <p className="text-[11px] uppercase tracking-wide text-subtle">Hot</p>
           <p className="mt-2 text-sm text-muted">{snap?.regime || snap?.thesis || "No live regime."}</p>
           {snap?.riskNote ? <p className="mt-2 text-sm">{snap.riskNote}</p> : null}
+          {snap?.quota ? (
+            <p className="mt-3 text-xs text-subtle">
+              {snap.planId ?? "observer"} · {snap.quota.blurb}
+            </p>
+          ) : null}
         </article>
         <article className="rounded-lg border border-border bg-surface p-4">
           <p className="text-[11px] uppercase tracking-wide text-subtle">Warm · lessons</p>
           <p className="mt-2 font-mono text-3xl tabular-nums">{lessons.length}</p>
-          <p className="mt-1 text-sm text-muted">Single source of truth per name.</p>
+          <p className="mt-1 text-sm text-muted">
+            {snap?.quota
+              ? `${live.length} / ${snap.quota.entities} · ${snap.quota.cloud ? "cloud sync on" : "local only"}`
+              : "Single source of truth per name."}
+          </p>
         </article>
         <article className="rounded-lg border border-border bg-surface p-4">
           <p className="text-[11px] uppercase tracking-wide text-subtle">Cold · journal</p>

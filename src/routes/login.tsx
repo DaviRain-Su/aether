@@ -3,8 +3,16 @@ import { type FormEvent, useState } from "react";
 import { GROK_PROVIDERS, authClient, authEnabled, signIn } from "@/lib/auth/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { pageHead } from "@/lib/seo";
 
-export const Route = createFileRoute("/login")({ component: Login });
+export const Route = createFileRoute("/login")({
+  component: Login,
+  head: () =>
+    pageHead(
+      "Sign in",
+      "Sign in with Google, X, or email. That identity is the handle for a Privy embedded wallet.",
+    ),
+});
 
 function Login() {
   const [email, setEmail] = useState("");
@@ -45,7 +53,7 @@ function Login() {
         </Link>
         <h1 className="mt-8 font-display text-3xl">Sign in</h1>
         <p className="mt-2 text-sm text-muted">
-          The desk works as a guest. Sign in if you want the book tied to an account.
+          Google signs you in. Privy mints the live wallet from that identity — not a second login. The desk still works as a guest on paper.
         </p>
 
         {authEnabled ? (
