@@ -1,15 +1,16 @@
-import { barWindow, okxInstId, type OkxBar } from "../okx";
+import { mergeCandles } from "../candles";
+import { BAR_MS, barWindow, okxInstId, type OkxBar } from "../okx";
 import type { BookLevel, Candle, DepthBook, FundingSnap } from "../types";
 
 const OKX = "https://www.okx.com";
 
 type OkxEnvelope<T> = { code?: string; msg?: string; data?: T };
 
-async function okxGet<T>(path: string): Promise<T | null> {
+async function okxGet<T>(path: string, timeout = 10_000): Promise<T | null> {
   try {
     const res = await fetch(`${OKX}${path}`, {
       headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(timeout),
     });
     if (!res.ok) return null;
     const json = (await res.json()) as OkxEnvelope<T>;
@@ -61,34 +62,70 @@ export function parseOkxCandles(rows: string[][] | undefined): Candle[] {
     if (!t || !(c > 0)) continue;
     out.push({ t, o, h, l, c, v });
   }
-  out.sort((a, b) => a.t - b.t);
   return out;
 }
 
-export async function fetchOkxCandles(instId: string, bar: OkxBar, limit = 300): Promise<Candle[]> {
-  const plan = barWindow(bar);
-  const want = Math.min(Math.max(limit, plan.limit), plan.limit * plan.pages);
-  const pageSize = Math.min(300, want);
-  const first = await okxGet<string[][]>(
-    `/api/v5/market/candles?instId=${encodeURIComponent(instId)}&bar=${bar}&limit=${pageSize}`,
-  );
-  const byT = new Map<number, Candle>();
-  for (const c of parseOkxCandles(first ?? undefined)) byT.set(c.t, c);
+export type CandlePage = { candles: Candle[]; hasMore: boolean };
 
-  let oldest = [...byT.keys()].sort((a, b) => a - b)[0];
-  for (let page = 1; page < plan.pages && byT.size < want && oldest; page += 1) {
-    const more = await okxGet<string[][]>(
-      `/api/v5/market/candles?instId=${encodeURIComponent(instId)}&bar=${bar}&limit=${pageSize}&after=${oldest}`,
+export async function fetchOkxCandles(
+  instId: string,
+  bar: OkxBar,
+  limit = 300,
+  before?: number,
+): Promise<CandlePage> {
+  const want = Math.max(limit, 300);
+  const step = BAR_MS[bar];
+  const chunks: Candle[][] = [];
+
+  if (!before) {
+    const plan = barWindow(bar);
+    const first = await okxGet<string[][]>(
+      `/api/v5/market/candles?instId=${encodeURIComponent(instId)}&bar=${bar}&limit=300`,
     );
-    const parsed = parseOkxCandles(more ?? undefined);
-    if (!parsed.length) break;
-    for (const c of parsed) byT.set(c.t, c);
-    const next = parsed.reduce((m, c) => Math.min(m, c.t), oldest);
-    if (next >= oldest) break;
-    oldest = next;
+    const live = parseOkxCandles(first ?? undefined);
+    chunks.push(live);
+    let oldest = live.reduce((m, c) => Math.min(m, c.t), Number.POSITIVE_INFINITY);
+    for (let page = 1; page < plan.pages && Number.isFinite(oldest); page += 1) {
+      const more = await okxGet<string[][]>(
+        `/api/v5/market/candles?instId=${encodeURIComponent(instId)}&bar=${bar}&limit=300&after=${oldest}`,
+      );
+      const parsed = parseOkxCandles(more ?? undefined);
+      if (!parsed.length) break;
+      chunks.push(parsed);
+      const next = parsed.reduce((m, c) => Math.min(m, c.t), oldest);
+      if (next >= oldest) break;
+      oldest = next;
+    }
   }
 
-  return [...byT.values()].sort((a, b) => a.t - b.t);
+  const origin = before ?? chunks.flat().reduce((m, c) => Math.min(m, c.t), before ?? Date.now());
+  const pages = Math.min(24, Math.ceil(want / 100));
+  const batch = 4;
+  let added = 0;
+  for (let i = 0; i < pages; i += batch) {
+    const jobs = Array.from({ length: Math.min(batch, pages - i) }, (_, k) => {
+      const after = Math.floor(origin - (i + k) * 100 * step);
+      return okxGet<string[][]>(
+        `/api/v5/market/history-candles?instId=${encodeURIComponent(instId)}&bar=${bar}&after=${after}&limit=100`,
+      );
+    });
+    const rows = await Promise.all(jobs);
+    let got = 0;
+    for (const data of rows) {
+      const parsed = parseOkxCandles(data ?? undefined);
+      if (!parsed.length) continue;
+      chunks.push(parsed);
+      got += parsed.length;
+    }
+    added += got;
+    const merged = mergeCandles(...chunks);
+    if (merged.length >= want || got === 0) {
+      return { candles: merged, hasMore: got > 0 && merged.length >= want };
+    }
+  }
+
+  const candles = mergeCandles(...chunks);
+  return { candles, hasMore: added > 0 };
 }
 
 export async function fetchOkxDepth(instId: string, sz = 16): Promise<DepthBook | null> {

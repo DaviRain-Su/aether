@@ -1,5 +1,7 @@
-import { BAR_MS, barWindow } from "../okx";
+import { BAR_MS, barWindow, historyWant } from "../okx";
+import { mergeCandles } from "../candles";
 import { baseSymbol, mappedBar, venueBar } from "../venues";
+import type { CandlePage } from "./okx";
 import type { BookLevel, Candle, ChartBar, DepthBook, FundingSnap } from "../types";
 
 const HL = "https://api.hyperliquid.xyz/info";
@@ -74,39 +76,57 @@ export async function fetchHlMarks(): Promise<HlMark[]> {
   return out;
 }
 
-export async function fetchHlCandles(symbol: string, bar: ChartBar): Promise<Candle[]> {
+export async function fetchHlCandles(
+  symbol: string,
+  bar: ChartBar,
+  limit = 300,
+  before?: number,
+): Promise<CandlePage> {
   const coin = hlCoin(symbol);
   const used = mappedBar("hyperliquid", bar);
   const interval = venueBar("hyperliquid", bar);
   const step = BAR_MS[used];
-  const plan = barWindow(used);
-  const limit = Math.max(plan.limit * plan.pages, 120);
-  const endTime = Date.now();
-  const startTime = endTime - step * limit;
-  const rows = await hlPost<
-    Array<{ t?: number; o?: string; h?: string; l?: string; c?: string; v?: string }>
-  >({
-    type: "candleSnapshot",
-    req: { coin, interval, startTime, endTime },
-  });
-  if (!Array.isArray(rows)) return [];
-  const out: Candle[] = [];
-  for (const row of rows) {
-    const t = num(row.t);
-    const c = num(row.c);
-    if (!t || !(c > 0)) continue;
-    const o = num(row.o, c);
-    out.push({
-      t,
-      o,
-      h: num(row.h, Math.max(o, c)),
-      l: num(row.l, Math.min(o, c)),
-      c,
-      v: num(row.v) * c,
+  const want = Math.max(limit, historyWant(used));
+  const page = 5000;
+  let endTime = before ?? Date.now();
+  const chunks: Candle[][] = [];
+  let lastN = 0;
+  for (let i = 0; i < 6; i++) {
+    const startTime = endTime - step * page;
+    const rows = await hlPost<
+      Array<{ t?: number; o?: string; h?: string; l?: string; c?: string; v?: string }>
+    >({
+      type: "candleSnapshot",
+      req: { coin, interval, startTime, endTime },
     });
+    if (!Array.isArray(rows) || !rows.length) break;
+    const out: Candle[] = [];
+    for (const row of rows) {
+      const t = num(row.t);
+      const c = num(row.c);
+      if (!t || !(c > 0)) continue;
+      if (before && t >= before) continue;
+      const o = num(row.o, c);
+      out.push({
+        t,
+        o,
+        h: num(row.h, Math.max(o, c)),
+        l: num(row.l, Math.min(o, c)),
+        c,
+        v: num(row.v) * c,
+      });
+    }
+    lastN = out.length;
+    if (!out.length) break;
+    chunks.push(out);
+    const oldest = out.reduce((m, c) => Math.min(m, c.t), endTime);
+    if (oldest >= endTime) break;
+    endTime = oldest - 1;
+    const merged = mergeCandles(...chunks);
+    if (merged.length >= want) return { candles: merged, hasMore: lastN >= page * 0.9 };
   }
-  out.sort((a, b) => a.t - b.t);
-  return out;
+  const candles = mergeCandles(...chunks);
+  return { candles, hasMore: lastN >= page * 0.9 };
 }
 
 export async function fetchHlDepth(symbol: string): Promise<DepthBook | null> {

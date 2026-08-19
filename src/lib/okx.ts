@@ -27,8 +27,17 @@ export function isOkxBar(value: string | null | undefined): value is OkxBar {
   return !!value && (OKX_BARS as readonly string[]).includes(value);
 }
 
+/** Live tip pages (OKX /candles max 300). */
 export function barWindow(bar: OkxBar): { limit: number; pages: number } {
-  if (bar === "1s") return { limit: 300, pages: 3 };
-  if (bar === "1m" || bar === "3m") return { limit: 300, pages: 2 };
-  return { limit: 300, pages: 1 };
+  if (bar === "1s") return { limit: 300, pages: 4 };
+  if (bar === "1m" || bar === "3m") return { limit: 300, pages: 4 };
+  return { limit: 300, pages: 2 };
+}
+
+/** How far back we try to fill on first paint / each history page. */
+export function historyWant(bar: OkxBar): number {
+  if (bar === "1s") return 1_800;
+  if (bar === "1m" || bar === "3m" || bar === "5m") return 1_500;
+  if (bar === "15m" || bar === "30m") return 2_000;
+  return 2_500;
 }

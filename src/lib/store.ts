@@ -15,7 +15,7 @@ import type {
   ProposedTrade,
 } from "./types";
 import { uid } from "./utils";
-import { parseTape, type LiveTape } from "./venues";
+import { DEFAULT_INDICATORS } from "./indicators";
 
 type HarnessState = {
   markets: Market[];

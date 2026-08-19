@@ -1,8 +1,23 @@
-import { BAR_MS, barWindow, type OkxBar } from "../okx";
+import { mergeCandles } from "../candles";
+import { BAR_MS, historyWant, type OkxBar } from "../okx";
+import type { CandlePage } from "./okx";
 import { baseSymbol, venueBar } from "../venues";
 import type { BookLevel, Candle, ChartBar, DepthBook, FundingSnap } from "../types";
 
 const BP = "https://api.backpack.exchange";
+
+/** Max bars per request before Backpack rejects the window. */
+const BP_MAX: Record<ChartBar, number> = {
+  "1s": 1800,
+  "1m": 1440,
+  "3m": 1440,
+  "5m": 1440,
+  "15m": 1920,
+  "30m": 1920,
+  "1H": 1440,
+  "4H": 1440,
+  "1D": 400,
+};
 
 export type BpTicker = {
   symbol: string;
@@ -24,7 +39,7 @@ async function bpGet<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${BP}${path}`, {
       headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return null;
     return (await res.json()) as T;
@@ -71,22 +86,17 @@ function parseBpTime(raw: string): number {
   return Number.isFinite(t) ? t : 0;
 }
 
-export async function fetchBpCandles(symbol: string, bar: ChartBar, limit = 300): Promise<Candle[]> {
-  const inst = bpSymbol(symbol);
-  const interval = venueBar("backpack", bar);
-  const step = BAR_MS[bar as OkxBar] ?? 60_000;
-  const start = Math.floor((Date.now() - step * limit) / 1000);
-  const rows = await bpGet<
-    Array<{
-      start?: string;
-      open?: string;
-      high?: string;
-      low?: string;
-      close?: string;
-      quoteVolume?: string;
-      volume?: string;
-    }>
-  >(`/api/v1/klines?symbol=${encodeURIComponent(inst)}&interval=${interval}&startTime=${start}`);
+type BpKline = {
+  start?: string;
+  open?: string;
+  high?: string;
+  low?: string;
+  close?: string;
+  quoteVolume?: string;
+  volume?: string;
+};
+
+function parseBp(rows: BpKline[] | null): Candle[] {
   if (!Array.isArray(rows)) return [];
   const out: Candle[] = [];
   for (const row of rows) {
@@ -102,8 +112,44 @@ export async function fetchBpCandles(symbol: string, bar: ChartBar, limit = 300)
       v: num(row.quoteVolume) || num(row.volume),
     });
   }
-  out.sort((a, b) => a.t - b.t);
   return out;
+}
+
+export async function fetchBpCandles(
+  symbol: string,
+  bar: ChartBar,
+  limit = 300,
+  before?: number,
+): Promise<CandlePage> {
+  const inst = bpSymbol(symbol);
+  const interval = venueBar("backpack", bar);
+  const step = BAR_MS[bar as OkxBar] ?? 60_000;
+  const maxBars = BP_MAX[bar] ?? 1440;
+  const windowMs = maxBars * step;
+  const want = Math.max(limit, historyWant(bar as OkxBar));
+  let end = before ?? Date.now();
+  const chunks: Candle[][] = [];
+  let pages = 0;
+  let lastAdded = 0;
+  while (pages < 8) {
+    const start = Math.floor((end - windowMs) / 1000);
+    const endSec = Math.floor(end / 1000);
+    const rows = await bpGet<BpKline[]>(
+      `/api/v1/klines?symbol=${encodeURIComponent(inst)}&interval=${interval}&startTime=${start}&endTime=${endSec}`,
+    );
+    const parsed = parseBp(rows);
+    lastAdded = parsed.length;
+    if (!parsed.length) break;
+    chunks.push(parsed);
+    const oldest = parsed.reduce((m, c) => Math.min(m, c.t), end);
+    if (oldest >= end) break;
+    end = oldest - 1;
+    pages += 1;
+    const merged = mergeCandles(...chunks);
+    if (merged.length >= want) return { candles: merged, hasMore: lastAdded >= maxBars * 0.8 };
+  }
+  const candles = mergeCandles(...chunks);
+  return { candles, hasMore: lastAdded >= maxBars * 0.8 };
 }
 
 export async function fetchBpDepth(symbol: string): Promise<DepthBook | null> {
@@ -155,6 +201,5 @@ export async function fetchBpFunding(symbol: string): Promise<FundingSnap | null
 }
 
 export function bpCandleLimit(bar: ChartBar): number {
-  const plan = barWindow(bar as OkxBar);
-  return plan.limit * plan.pages;
+  return historyWant(bar as OkxBar);
 }

@@ -1,4 +1,5 @@
-import { barWindow, type OkxBar } from "../okx";
+import { mergeCandles } from "../candles";
+import type { CandlePage } from "./okx";
 import { baseSymbol, venueBar } from "../venues";
 import type { BookLevel, Candle, ChartBar, DepthBook, FundingSnap } from "../types";
 
@@ -13,7 +14,7 @@ async function phxGet<T>(path: string): Promise<T | null> {
   try {
     const res = await fetch(`${PHX}${path}`, {
       headers: { accept: "application/json" },
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return null;
     return (await res.json()) as T;
@@ -54,7 +55,6 @@ export async function fetchPhxMarks(): Promise<PhxMark[]> {
       symbol,
       price,
       change24h: prev > 0 ? ((price - prev) / prev) * 100 : 0,
-      // overview fundingRate is already in percent (0.104 = 0.104%)
       funding: num(last.fundingRate) / 100,
     });
   }
@@ -75,18 +75,24 @@ type PhxCandle = {
   volume?: number;
 };
 
-export async function fetchPhxCandles(symbol: string, bar: ChartBar): Promise<Candle[]> {
+export async function fetchPhxCandles(
+  symbol: string,
+  bar: ChartBar,
+  _limit?: number,
+  before?: number,
+): Promise<CandlePage> {
   const inst = phxSymbol(symbol);
   const tf = venueBar("phoenix", bar);
   const rows = await phxGet<PhxCandle[]>(
     `/v1/candles/${encodeURIComponent(inst)}?timeframe=${tf}`,
   );
-  if (!Array.isArray(rows)) return [];
+  if (!Array.isArray(rows)) return { candles: [], hasMore: false };
   const out: Candle[] = [];
   for (const row of rows) {
     const t = num(row.time);
     const c = num(row.markClose ?? row.close);
     if (!t || !(c > 0)) continue;
+    if (before && t >= before) continue;
     out.push({
       t,
       o: num(row.markOpen ?? row.open, c),
@@ -96,10 +102,8 @@ export async function fetchPhxCandles(symbol: string, bar: ChartBar): Promise<Ca
       v: num(row.volumeQuote ?? row.volume),
     });
   }
-  out.sort((a, b) => a.t - b.t);
-  const plan = barWindow(bar as OkxBar);
-  const keep = Math.max(plan.limit * plan.pages, 400);
-  return out.slice(-keep);
+  const candles = mergeCandles(out);
+  return { candles, hasMore: false };
 }
 
 export async function fetchPhxDepth(symbol: string): Promise<DepthBook | null> {
@@ -137,7 +141,6 @@ export async function fetchPhxFunding(symbol: string): Promise<FundingSnap | nul
   const last = data?.rates?.at(-1);
   if (!last) return null;
   const ts = num(last.timestamp) * (String(last.timestamp).length < 12 ? 1000 : 1);
-  // fundingRatePercentage is a decimal rate (0.001041 = 0.1041%), despite the name.
   return {
     instId: data?.symbol ?? inst,
     rate: num(last.fundingRatePercentage),

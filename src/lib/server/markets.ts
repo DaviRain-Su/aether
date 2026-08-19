@@ -1,10 +1,10 @@
+import { mergeCandles } from "../candles";
 import { COINGECKO_IDS, buildStaticMarkets } from "../catalog";
-import { BAR_MS, barWindow, type OkxBar } from "../okx";
+import { BAR_MS, historyWant, type OkxBar } from "../okx";
 import type { Candle, ChartBar, DepthBook, FundingSnap, Market, TapeSource } from "../types";
 import { mappedBar, parseTape } from "../venues";
 import {
   applyBpTicker,
-  bpCandleLimit,
   bpSymbol,
   fetchBpCandles,
   fetchBpDepth,
@@ -20,6 +20,7 @@ import {
   fetchOkxFunding,
   fetchOkxTickers,
   resolveOkxInst,
+  type CandlePage,
   type OkxTicker,
 } from "./okx";
 
@@ -27,9 +28,18 @@ type Cache<T> = { at: number; value: T };
 
 const LIVE: ReadonlySet<string> = new Set(["okx", "backpack", "phoenix", "hyperliquid"]);
 
+type Hist = {
+  candles: Candle[];
+  hasMore: boolean;
+  tipAt: number;
+  source: Market["source"];
+  instId?: string;
+  mappedBar?: ChartBar;
+};
+
 const g = globalThis as typeof globalThis & {
   __aetherTape?: Map<string, Cache<Market[]>>;
-  __aetherCandles?: Map<string, Cache<{ candles: Candle[]; source: Market["source"]; instId?: string; mappedBar?: ChartBar }>>;
+  __aetherHistory?: Map<string, Hist>;
   __aetherDepth?: Map<string, Cache<DepthBook>>;
   __aetherFunding?: Map<string, Cache<FundingSnap>>;
 };
@@ -201,68 +211,126 @@ export type CandlePack = {
   source: Market["source"];
   instId?: string;
   mappedBar?: ChartBar;
+  hasMore?: boolean;
 };
+
+async function pullVenue(
+  tape: ReturnType<typeof parseTape>,
+  symbol: string,
+  bar: OkxBar,
+  want: number,
+  before?: number,
+): Promise<(CandlePage & { source: Market["source"]; instId?: string; mapped?: ChartBar }) | null> {
+  if (tape === "backpack") {
+    const page = await fetchBpCandles(symbol, bar, want, before);
+    if (page.candles.length > 4) {
+      return { ...page, source: "backpack", instId: bpSymbol(symbol), mapped: bar };
+    }
+    return null;
+  }
+  if (tape === "phoenix") {
+    const page = await fetchPhxCandles(symbol, bar, want, before);
+    if (page.candles.length > 4) {
+      return {
+        ...page,
+        source: "phoenix",
+        instId: symbol.replace(/-PERP$/, "").toUpperCase(),
+        mapped: mappedBar("phoenix", bar),
+      };
+    }
+    return null;
+  }
+  if (tape === "hyperliquid") {
+    const page = await fetchHlCandles(symbol, bar, want, before);
+    if (page.candles.length > 4) {
+      return {
+        ...page,
+        source: "hyperliquid",
+        instId: hlCoin(symbol),
+        mapped: mappedBar("hyperliquid", bar),
+      };
+    }
+    return null;
+  }
+  const instId = resolveOkxInst(symbol);
+  if (!instId) return null;
+  const page = await fetchOkxCandles(instId, bar, want, before);
+  if (page.candles.length > 4) return { ...page, source: "okx", instId, mapped: bar };
+  return null;
+}
 
 export async function getCandles(
   symbol: string,
   bar: OkxBar = "15m",
   source: TapeSource = "okx",
+  opts?: { before?: number; want?: number },
 ): Promise<CandlePack> {
-  g.__aetherCandles ??= new Map();
+  g.__aetherHistory ??= new Map();
   const tape = parseTape(source);
   const key = `${tape}:${symbol}:${bar}`;
-  const hit = cache(g.__aetherCandles.get(key), candleTtl(bar));
-  if (hit) return hit;
+  const want = opts?.want ?? historyWant(bar);
+  const store = g.__aetherHistory.get(key);
 
-  if (tape === "backpack") {
-    const candles = await fetchBpCandles(symbol, bar, bpCandleLimit(bar));
-    if (candles.length > 4) {
-      const packed: CandlePack = { candles, source: "backpack", instId: bpSymbol(symbol), mappedBar: bar };
-      g.__aetherCandles.set(key, { at: Date.now(), value: packed });
-      return packed;
-    }
-  } else if (tape === "phoenix") {
-    const candles = await fetchPhxCandles(symbol, bar);
-    if (candles.length > 4) {
-      const packed: CandlePack = {
-        candles,
-        source: "phoenix",
-        instId: symbol.replace(/-PERP$/, "").toUpperCase(),
-        mappedBar: mappedBar("phoenix", bar),
-      };
-      g.__aetherCandles.set(key, { at: Date.now(), value: packed });
-      return packed;
-    }
-  } else if (tape === "hyperliquid") {
-    const candles = await fetchHlCandles(symbol, bar);
-    if (candles.length > 4) {
-      const packed: CandlePack = {
-        candles,
-        source: "hyperliquid",
-        instId: hlCoin(symbol),
-        mappedBar: mappedBar("hyperliquid", bar),
-      };
-      g.__aetherCandles.set(key, { at: Date.now(), value: packed });
-      return packed;
-    }
-  } else {
-    const instId = resolveOkxInst(symbol);
-    if (instId) {
-      const candles = await fetchOkxCandles(instId, bar, barWindow(bar).limit * barWindow(bar).pages);
-      if (candles.length > 4) {
-        const packed: CandlePack = { candles, source: "okx", instId, mappedBar: bar };
-        g.__aetherCandles.set(key, { at: Date.now(), value: packed });
-        return packed;
-      }
-    }
+  if (!opts?.before && store && Date.now() - store.tipAt < candleTtl(bar) && store.candles.length > 4) {
+    return {
+      candles: store.candles,
+      source: store.source,
+      instId: store.instId,
+      mappedBar: store.mappedBar,
+      hasMore: store.hasMore,
+    };
   }
+
+  if (!opts?.before && store && store.candles.length > 4) {
+    const tip = await pullVenue(tape, symbol, bar, Math.min(300, want), undefined);
+    if (tip) {
+      store.candles = mergeCandles(store.candles, tip.candles);
+      store.tipAt = Date.now();
+      store.source = tip.source;
+      store.instId = tip.instId;
+      store.mappedBar = tip.mapped;
+    } else {
+      store.tipAt = Date.now();
+    }
+    g.__aetherHistory.set(key, store);
+    return {
+      candles: store.candles,
+      source: store.source,
+      instId: store.instId,
+      mappedBar: store.mappedBar,
+      hasMore: store.hasMore,
+    };
+  }
+
+  const before = opts?.before ?? (store?.candles[0]?.t);
+  const page = await pullVenue(tape, symbol, bar, want, opts?.before);
+  if (page) {
+    const candles = mergeCandles(store?.candles ?? [], page.candles);
+    const next: Hist = {
+      candles,
+      hasMore: page.hasMore,
+      tipAt: opts?.before ? (store?.tipAt ?? Date.now()) : Date.now(),
+      source: page.source,
+      instId: page.instId,
+      mappedBar: page.mapped,
+    };
+    g.__aetherHistory.set(key, next);
+    return {
+      candles,
+      source: page.source,
+      instId: page.instId,
+      mappedBar: page.mapped,
+      hasMore: page.hasMore,
+    };
+  }
+  void before;
 
   const markets = await getMarkets(tape);
   const m = markets.find((x) => x.symbol === symbol);
   const cgId = m?.coingeckoId ?? COINGECKO_IDS[symbol.replace("-PERP", "")];
   if (cgId && (bar === "15m" || bar === "1H" || bar === "4H" || bar === "1D")) {
     try {
-      const days = bar === "1D" ? 90 : bar === "4H" ? 30 : bar === "1H" ? 7 : 1;
+      const days = bar === "1D" ? "max" : bar === "4H" ? 90 : bar === "1H" ? 30 : 7;
       const res = await fetch(
         `https://api.coingecko.com/api/v3/coins/${cgId}/market_chart?vs_currency=usd&days=${days}`,
         { headers: { accept: "application/json" }, signal: AbortSignal.timeout(8_000) },
@@ -284,8 +352,14 @@ export async function getCandles(
           }
         }
         if (grouped.length > 4) {
-          const packed: CandlePack = { candles: grouped, source: "coingecko", mappedBar: bar };
-          g.__aetherCandles.set(key, { at: Date.now(), value: packed });
+          const packed: CandlePack = { candles: grouped, source: "coingecko", mappedBar: bar, hasMore: false };
+          g.__aetherHistory.set(key, {
+            candles: grouped,
+            hasMore: false,
+            tipAt: Date.now(),
+            source: "coingecko",
+            mappedBar: bar,
+          });
           return packed;
         }
       }
@@ -310,8 +384,14 @@ export async function getCandles(
     };
   });
   if (!candles.length) candles.push({ t: now, o: px, h: px, l: px, c: px, v: 0 });
-  const packed: CandlePack = { candles, source: "seed", mappedBar: bar };
-  g.__aetherCandles.set(key, { at: Date.now(), value: packed });
+  const packed: CandlePack = { candles, source: "seed", mappedBar: bar, hasMore: false };
+  g.__aetherHistory.set(key, {
+    candles,
+    hasMore: false,
+    tipAt: Date.now(),
+    source: "seed",
+    mappedBar: bar,
+  });
   return packed;
 }
 
@@ -392,5 +472,3 @@ export function newsWire(query: string) {
     ts: Date.now() - i * 3_600_000,
   }));
 }
-
-

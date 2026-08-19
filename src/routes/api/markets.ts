@@ -13,7 +13,11 @@ export const Route = createFileRoute("/api/markets")({
         if (symbol) {
           const rawBar = url.searchParams.get("bar");
           const bar = isOkxBar(rawBar) ? rawBar : "15m";
-          const tape = await getCandles(symbol, bar, source);
+          const beforeRaw = url.searchParams.get("before");
+          const before = beforeRaw ? Number(beforeRaw) : undefined;
+          const tape = await getCandles(symbol, bar, source, {
+            before: before && Number.isFinite(before) ? before : undefined,
+          });
           return Response.json({ ...tape, bar, source: tape.source, tape: source });
         }
         const depth = url.searchParams.get("depth");
